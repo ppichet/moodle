@@ -78,7 +78,11 @@ class question_edit_multichoice_form extends question_edit_form {
             if (count($answers)) {
                 $key = 0;
                 foreach ($answers as $answer){
-                    $default_values['answer['.$key.']'] = $answer->answer;
+                    $draftid = file_get_submitted_draft_itemid('answer['.$key.']');
+                    $default_values['answer['.$key.']'] = array();
+                    $default_values['answer['.$key.']']['text'] = file_prepare_draft_area($draftid, $this->context->id, 'question', 'answer', empty($answer->id)?null:(int)$answer->id, $this->fileoptions, $answer->answer);
+                    $default_values['answer['.$key.']']['format'] = $answer->answerformat;
+                    $default_values['answer['.$key.']']['itemid'] = $draftid;
                     $default_values['fraction['.$key.']'] = $answer->fraction;
 
                     // prepare question text
@@ -119,6 +123,19 @@ class question_edit_multichoice_form extends question_edit_form {
         }
         return $question;
     }
+    function get_per_answer_fields(&$mform, $label, $gradeoptions, &$repeatedoptions, &$answersoption) {
+        $repeated = array();
+        $repeated[] =& $mform->createElement('header', 'answerhdr', $label);
+        $repeated[] =& $mform->createElement('editor', 'answer', get_string('answer', 'quiz'),
+                                array('rows' => 5), $this->editoroptions);
+        $repeated[] =& $mform->createElement('select', 'fraction', get_string('grade'), $gradeoptions);
+        $repeated[] =& $mform->createElement('editor', 'feedback', get_string('feedback', 'quiz'),
+                                array('rows' => 5), $this->editoroptions);
+        $repeatedoptions['answer']['type'] = PARAM_RAW;
+        $repeatedoptions['fraction']['default'] = 0;
+        $answersoption = 'answers';
+        return $repeated;
+    }
 
     function qtype() {
         return 'multichoice';
@@ -134,12 +151,12 @@ class question_edit_multichoice_form extends question_edit_form {
 
         foreach ($answers as $key => $answer){
             //check no of choices
-            $trimmedanswer = trim($answer);
+            $trimmedanswer = trim($answer['text']);
             if (!empty($trimmedanswer)){
                 $answercount++;
             }
             //check grades
-            if ($answer != '') {
+            if ($answer['text'] != '' ) {
                 if ($data['fraction'][$key] > 0) {
                     $totalfraction += $data['fraction'][$key];
                 }
