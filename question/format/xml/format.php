@@ -218,19 +218,21 @@ class qformat_xml extends qformat_default {
      * @param array answer xml tree for single answer
      * @return object answer object
      */
-    function import_answer($answer) {
+    function import_answer($answer,$imageinanswer= false) {
         $fraction = $this->getpath($answer, array('@', 'fraction'), 0);
         $answertext = $this->getpath($answer, array('#', 'text', 0, '#'), '', true);
         $answerformat = $this->trans_format($this->getpath($answer,
                 array('#', 'text', 0, '#'), 'moodle_auto_format'));
         $answerfiles = array();
-        $files = $this->getpath($answer, array('#', 'answer', 0, '#', 'file'), array());
-        foreach ($files as $file) {
-            $data = new stdclass;
-            $data->content = $file['#'];
-            $data->name = $file['@']['name'];
-            $data->encoding = $file['@']['encoding'];
-            $answerfiles[] = $data;
+        if($imageinanswer){
+            $files = $this->getpath($answer, array('#', 'file'), array());
+	        foreach ($files as $file) {
+	            $data = new stdclass;
+	            $data->content = $file['#'];
+	            $data->name = $file['@']['name'];
+	            $data->encoding = $file['@']['encoding'];
+	            $answerfiles[] = $data;
+            }
         }
 
         $feedbacktext = $this->getpath($answer, array('#', 'feedback', 0, '#', 'text', 0, '#'), '', true);
@@ -333,7 +335,7 @@ class qformat_xml extends qformat_default {
         $answers = $question['#']['answer'];
         $a_count = 0;
         foreach ($answers as $answer) {
-            $ans = $this->import_answer($answer);
+            $ans = $this->import_answer($answer,true);
             $qo->answer[$a_count] = $ans->answer;
             $qo->fraction[$a_count] = $ans->fraction;
             $qo->feedback[$a_count] = $ans->feedback;
@@ -1171,6 +1173,7 @@ class qformat_xml extends qformat_default {
                 $percent = $answer->fraction * 100;
                 $expout .= "      <answer fraction=\"$percent\">\n";
                 $expout .= $this->writetext($answer->answer,4,false);
+                $expout .= $this->writefiles($answer->answerfiles);
                 $feedbackformat = $this->get_format($answer->feedbackformat);
                 $expout .= "      <feedback format=\"$feedbackformat\">\n";
                 $expout .= $this->writetext($answer->feedback,5,false);
