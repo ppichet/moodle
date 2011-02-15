@@ -43,7 +43,7 @@ class question_multichoice_qtype extends default_questiontype {
         // following hack to check at least two answers exist
         $answercount = 0;
         foreach ($question->answer as $key => $answer) {
-            if ($answer != '') {
+            if (trim($answer['text']) != '') {
                 $answercount++;
             }
         }
@@ -57,7 +57,7 @@ class question_multichoice_qtype extends default_questiontype {
         $maxfraction = -1;
         $answers = array();
         foreach ($question->answer as $key => $answerdata) {
-            if ($answerdata == '') {
+            if (trim($answerdata['text']) == '') {
                 continue;
             }
 
@@ -101,6 +101,7 @@ class question_multichoice_qtype extends default_questiontype {
         $fs = get_file_storage();
         foreach($oldanswers as $oldanswer) {
             $fs->delete_area_files($context->id, 'question', 'answerfeedback', $oldanswer->id);
+            $fs->delete_area_files($context->id, 'question', 'answer', $oldanswer->id);
             $DB->delete_records('question_answers', array('id' => $oldanswer->id));
         }
 
@@ -317,8 +318,9 @@ class question_multichoice_qtype extends default_questiontype {
             }
 
             // Print the answer text
-            $a->text = $this->number_in_style($key, $question->options->answernumbering) .
-                format_text($answer->answer, $answer->answerformat, $formatoptions, $cmoptions->course);
+                $a->text = quiz_rewrite_question_urls($answer->answer, 'pluginfile.php', $context->id, 'question', 'answer',array( $state->attempt ,$state->question ), $answer->id);// array($state->question$state->attempt
+            $a->text = $this->number_in_style($key, $question->options->answernumbering) .$state->attempt.
+                format_text($a->text, $answer->answerformat, $formatoptions, $cmoptions->course);
 
             // Print feedback if feedback is on
             if (($options->feedback || $options->correct_responses) && $checked) {
@@ -541,6 +543,8 @@ class question_multichoice_qtype extends default_questiontype {
             return true;
         } else if ($component == 'question' && $filearea == 'answerfeedback') {
             return $options->feedback && (array_key_exists($itemid, $question->options->answers));
+        } else if ($component == 'question' && $filearea == 'answer') {
+            return  array_key_exists($itemid, $question->options->answers);
         } else {
             return parent::check_file_access($question, $state, $options, $contextid, $component,
                     $filearea, $args);
