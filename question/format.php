@@ -712,7 +712,7 @@ class qformat_default {
                 $question->generalfeedbackfiles = $files;
                 if (!empty($question->options->answers)) {
                     foreach ($question->options->answers as $answer) {
-                        $files = $fs->get_area_files($contextid, 'question', 'answer', $answer->id);
+                        $files = $fs->get_area_files($contextid, 'question', 'answertext', $answer->id);
                         $answer->answerfiles = $files;
                         $files = $fs->get_area_files($contextid, 'question', 'answerfeedback', $answer->id);
                         $answer->feedbackfiles = $files;

@@ -80,7 +80,7 @@ class question_edit_multichoice_form extends question_edit_form {
                 foreach ($answers as $answer){
                     $draftid = file_get_submitted_draft_itemid('answer['.$key.']');
                     $default_values['answer['.$key.']'] = array();
-                    $default_values['answer['.$key.']']['text'] = file_prepare_draft_area($draftid, $this->context->id, 'question', 'answer', empty($answer->id)?null:(int)$answer->id, $this->fileoptions, $answer->answer);
+                    $default_values['answer['.$key.']']['text'] = file_prepare_draft_area($draftid, $this->context->id, 'question', 'answertext', empty($answer->id)?null:(int)$answer->id, $this->fileoptions, $answer->answer);
                     $default_values['answer['.$key.']']['format'] = $answer->answerformat;
                     $default_values['answer['.$key.']']['itemid'] = $draftid;
                     $default_values['fraction['.$key.']'] = $answer->fraction;

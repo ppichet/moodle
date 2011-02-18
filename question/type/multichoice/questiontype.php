@@ -74,7 +74,7 @@ class question_multichoice_qtype extends default_questiontype {
             if (is_array($answerdata)) {
                 // Doing an import
                 $answer->answer = $this->import_or_save_files($answerdata,
-                        $context, 'question', 'answer', $answer->id);
+                        $context, 'question', 'answertext', $answer->id);
                 $answer->answerformat = $answerdata['format'];
             } else {
                 // Saving the form
@@ -101,7 +101,7 @@ class question_multichoice_qtype extends default_questiontype {
         $fs = get_file_storage();
         foreach($oldanswers as $oldanswer) {
             $fs->delete_area_files($context->id, 'question', 'answerfeedback', $oldanswer->id);
-            $fs->delete_area_files($context->id, 'question', 'answer', $oldanswer->id);
+            $fs->delete_area_files($context->id, 'question', 'answertext', $oldanswer->id);
             $DB->delete_records('question_answers', array('id' => $oldanswer->id));
         }
 
@@ -318,7 +318,7 @@ class question_multichoice_qtype extends default_questiontype {
             }
 
             // Print the answer text
-                $a->text = quiz_rewrite_question_urls($answer->answer, 'pluginfile.php', $context->id, 'question', 'answer',array( $state->attempt ,$state->question ), $answer->id);// array($state->question$state->attempt
+            $a->text = quiz_rewrite_question_urls($answer->answer, 'pluginfile.php', $context->id, 'question', 'answertext',array( $state->attempt ,$state->question ), $answer->id);
             $a->text = $this->number_in_style($key, $question->options->answernumbering) .$state->attempt.
                 format_text($a->text, $answer->answerformat, $formatoptions, $cmoptions->course);
 
@@ -543,7 +543,7 @@ class question_multichoice_qtype extends default_questiontype {
             return true;
         } else if ($component == 'question' && $filearea == 'answerfeedback') {
             return $options->feedback && (array_key_exists($itemid, $question->options->answers));
-        } else if ($component == 'question' && $filearea == 'answer') {
+        } else if ($component == 'question' && $filearea == 'answertext') {
             return  array_key_exists($itemid, $question->options->answers);
         } else {
             return parent::check_file_access($question, $state, $options, $contextid, $component,

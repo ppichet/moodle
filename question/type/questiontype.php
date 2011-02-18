@@ -1715,7 +1715,7 @@ class default_questiontype {
         foreach ($answerids as $answerid => $notused) {
             if ($answerstoo) {
                 $fs->move_area_files_to_new_context($oldcontextid,
-                        $newcontextid, 'question', 'answer', $answerid);
+                        $newcontextid, 'question', 'answertext', $answerid);
             }
             $fs->move_area_files_to_new_context($oldcontextid,
                     $newcontextid, 'question', 'answerfeedback', $answerid);
@@ -1748,7 +1748,7 @@ class default_questiontype {
                 array('question' => $questionid), 'id', 'id,1');
         foreach ($answerids as $answerid => $notused) {
             if ($answerstoo) {
-                $fs->delete_area_files($contextid, 'question', 'answer', $answerid);
+                $fs->delete_area_files($contextid, 'question', 'answertext', $answerid);
             }
             $fs->delete_area_files($contextid, 'question', 'answerfeedback', $answerid);
         }
