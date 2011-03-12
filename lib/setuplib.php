@@ -54,6 +54,14 @@ define('MEMORY_EXTRA', -3);
 define('MEMORY_HUGE', -4);
 
 /**
+ * Software maturity levels used by the core and plugins
+ */
+define('MATURITY_ALPHA',    50);    // internals can be tested using white box techniques
+define('MATURITY_BETA',     100);   // feature complete, ready for preview and testing
+define('MATURITY_RC',       150);   // tested, will be released unless there are fatal bugs
+define('MATURITY_STABLE',   200);   // ready for production deployment
+
+/**
  * Simple class. It is usually used instead of stdClass because it looks
  * more familiar to Java developers ;-) Do not use for type checking of
  * function parameters. Please use stdClass instead.
@@ -721,15 +729,14 @@ function setup_get_remote_url() {
     list($rurl['host']) = explode(':', $_SERVER['HTTP_HOST']);
     $rurl['port'] = $_SERVER['SERVER_PORT'];
     $rurl['path'] = $_SERVER['SCRIPT_NAME']; // Script path without slash arguments
+    $rurl['scheme'] = (empty($_SERVER['HTTPS']) or $_SERVER['HTTPS'] === 'off' or $_SERVER['HTTPS'] === 'Off' or $_SERVER['HTTPS'] === 'OFF') ? 'http' : 'https';
 
     if (stripos($_SERVER['SERVER_SOFTWARE'], 'apache') !== false) {
         //Apache server
-        $rurl['scheme']   = empty($_SERVER['HTTPS']) ? 'http' : 'https';
         $rurl['fullpath'] = $_SERVER['REQUEST_URI'];
 
     } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'iis') !== false) {
         //IIS - needs a lot of tweaking to make it work
-        $rurl['scheme']   = ($_SERVER['HTTPS'] == 'off') ? 'http' : 'https';
         $rurl['fullpath'] = $_SERVER['SCRIPT_NAME'];
 
         // NOTE: ignore PATH_INFO because it is incorrectly encoded using 8bit filesystem legacy encoding in IIS
@@ -745,7 +752,6 @@ function setup_get_remote_url() {
 
     } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'lighttpd') !== false) {
         //lighttpd - not officially supported
-        $rurl['scheme']   = empty($_SERVER['HTTPS']) ? 'http' : 'https';
         $rurl['fullpath'] = $_SERVER['REQUEST_URI']; // TODO: verify this is always properly encoded
 
     } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
@@ -753,22 +759,18 @@ function setup_get_remote_url() {
         if (!isset($_SERVER['SCRIPT_NAME'])) {
             die('Invalid server configuration detected, please try to add "fastcgi_param SCRIPT_NAME $fastcgi_script_name;" to the nginx server configuration.');
         }
-        $rurl['scheme']   = empty($_SERVER['HTTPS']) ? 'http' : 'https';
         $rurl['fullpath'] = $_SERVER['REQUEST_URI']; // TODO: verify this is always properly encoded
 
      } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'cherokee') !== false) {
          //cherokee - not officially supported
-         $rurl['scheme']   = ($_SERVER['HTTPS'] == 'off') ? 'http' : 'https';
          $rurl['fullpath'] = $_SERVER['REQUEST_URI']; // TODO: verify this is always properly encoded
 
      } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'zeus') !== false) {
          //zeus - not officially supported
-         $rurl['scheme']   = ($_SERVER['HTTPS'] == 'off') ? 'http' : 'https';
          $rurl['fullpath'] = $_SERVER['REQUEST_URI']; // TODO: verify this is always properly encoded
 
     } else if (stripos($_SERVER['SERVER_SOFTWARE'], 'LiteSpeed') !== false) {
         //LiteSpeed - not officially supported
-        $rurl['scheme']   = ($_SERVER['HTTPS'] == 'off') ? 'http' : 'https';
         $rurl['fullpath'] = $_SERVER['REQUEST_URI']; // TODO: verify this is always properly encoded
 
      } else {
@@ -1123,6 +1125,38 @@ function init_eaccelerator() {
     return false;
 }
 
+/**
+ * Checks if current user is a web crawler.
+ *
+ * This list can not be made complete, this is not a security
+ * restriction, we make the list only to help these sites
+ * especially when automatic guest login is disabled.
+ *
+ * If admin needs security they should enable forcelogin
+ * and disable guest access!!
+ *
+ * @return bool
+ */
+function is_web_crawler() {
+    if (!empty($_SERVER['HTTP_USER_AGENT'])) {
+        if (strpos($_SERVER['HTTP_USER_AGENT'], 'Googlebot') !== false ) {
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], 'google.com') !== false ) { // Google
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], 'Yahoo! Slurp') !== false ) {  // Yahoo
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], '[ZSEBOT]') !== false ) {  // Zoomspider
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], 'MSNBOT') !== false ) {  // MSN Search
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], 'Yandex') !== false ) {
+            return true;
+        } else if (strpos($_SERVER['HTTP_USER_AGENT'], 'AltaVista') !== false ) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /**
  * This class solves the problem of how to initialise $OUTPUT.

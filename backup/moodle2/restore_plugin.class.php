@@ -174,9 +174,12 @@ abstract class restore_plugin {
     /**
      * Return the new id of a mapping for the given itemname
      *
+     * @param string $itemname the type of item
+     * @param int $oldid the item ID from the backup
+     * @param mixed $ifnotfound what to return if $oldid wasnt found. Defaults to false
      */
-    protected function get_mappingid($itemname, $oldid) {
-        return $this->step->get_mappingid($itemname, $oldid);
+    protected function get_mappingid($itemname, $oldid, $ifnotfound = false) {
+        return $this->step->get_mappingid($itemname, $oldid, $ifnotfound);
     }
 
     /**
@@ -201,6 +204,18 @@ abstract class restore_plugin {
     protected function apply_date_offset($value) {
         return $this->step->apply_date_offset($value);
     }
+
+    /**
+     * Returns the value of one (task/plan) setting
+     */
+    protected function get_setting_value($name) {
+        if (is_null($this->task)) {
+            throw new restore_step_exception('not_specified_restore_task');
+        }
+        return $this->task->get_setting_value($name);
+    }
+
+// end of restore_step/structure_step/task wrappers
 
     /**
      * Simple helper function that returns the name for the restore_path_element

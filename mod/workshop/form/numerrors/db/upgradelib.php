@@ -53,11 +53,10 @@ function workshopform_numerrors_upgrade_legacy() {
                  WHERE workshopid $workshopids
                        AND newid IS NULL";
         $rs = $DB->get_recordset_sql($sql, $params);
-        $newworkshopids = workshop_upgrade_workshop_id_mappings();
         foreach ($rs as $old) {
             // process the information about mapping
             $newmapping = new stdclass();
-            $newmapping->workshopid = $newworkshopids[$old->workshopid];
+            $newmapping->workshopid = $old->workshopid;
             $newmapping->nonegative = $old->elementno;
             $newmapping->grade = $old->maxscore;
             if ($old->maxscore > 0) {
@@ -70,7 +69,7 @@ function workshopform_numerrors_upgrade_legacy() {
             $DB->insert_record('workshopform_numerrors_map', $newmapping);
             // process the information about the element itself
             if (trim($old->description) and $old->description <> '@@ GRADE_MAPPING_ELEMENT @@') {
-                $new = workshopform_numerrors_upgrade_element($old, $newworkshopids[$old->workshopid]);
+                $new = workshopform_numerrors_upgrade_element($old, $old->workshopid);
                 $newid = $DB->insert_record('workshopform_numerrors', $new);
             } else {
                 $newid = 0;
@@ -84,7 +83,7 @@ function workshopform_numerrors_upgrade_legacy() {
         // refetch them from DB so that this function can be called during recovery
         $newelementids = workshop_upgrade_element_id_mappings('numerrors');
 
-        // migrate all grades for these elements (it est the values that reviewers put into forms)
+        // migrate all grades for these elements (i.e. the values that reviewers put into forms)
         echo $OUTPUT->notification('Copying assessment form grades', 'notifysuccess');
         $sql = "SELECT *
                   FROM {workshop_grades_old}

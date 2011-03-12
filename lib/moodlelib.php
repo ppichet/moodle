@@ -3784,12 +3784,6 @@ function get_complete_user_data($field, $value, $mnethostid = null) {
 
 /// Get various settings and preferences
 
-    if ($displays = $DB->get_records('course_display', array('userid'=>$user->id))) {
-        foreach ($displays as $display) {
-            $user->display[$display->course] = $display->display;
-        }
-    }
-
     // preload preference cache
     check_user_preferences_loaded($user);
 
@@ -3808,18 +3802,23 @@ function get_complete_user_data($field, $value, $mnethostid = null) {
 
     // this is a special hack to speedup calendar display
     $user->groupmember = array();
-    if ($groups = $DB->get_records_sql($sql, array($user->id))) {
-        foreach ($groups as $group) {
-            if (!array_key_exists($group->courseid, $user->groupmember)) {
-                $user->groupmember[$group->courseid] = array();
+    if (!isguestuser($user)) {
+        if ($groups = $DB->get_records_sql($sql, array($user->id))) {
+            foreach ($groups as $group) {
+                if (!array_key_exists($group->courseid, $user->groupmember)) {
+                    $user->groupmember[$group->courseid] = array();
+                }
+                $user->groupmember[$group->courseid][$group->id] = $group->id;
             }
-            $user->groupmember[$group->courseid][$group->id] = $group->id;
         }
     }
 
 /// Add the custom profile fields to the user record
-    require_once($CFG->dirroot.'/user/profile/lib.php');
-    profile_load_custom_fields($user);
+    $user->profile = array();
+    if (!isguestuser($user)) {
+        require_once($CFG->dirroot.'/user/profile/lib.php');
+        profile_load_custom_fields($user);
+    }
 
 /// Rewrite some variables if necessary
     if (!empty($user->description)) {
@@ -4832,8 +4831,7 @@ function setnew_password_and_mail($user) {
 /**
  * Resets specified user's password and send the new password to the user via email.
  *
- * @global object
- * @param user $user A {@link $USER} object
+ * @param stdClass $user A {@link $USER} object
  * @return bool Returns true if mail was sent OK and false if there was an error.
  */
 function reset_password_and_mail($user) {
@@ -4866,6 +4864,8 @@ function reset_password_and_mail($user) {
     $message = get_string('newpasswordtext', '', $a);
 
     $subject  = format_string($site->fullname) .': '. get_string('changedpassword');
+
+    unset_user_preference('create_password', $user); // prevent cron from generating the password
 
     //directly email rather than using the messaging system to ensure its not routed to a popup or jabber
     return email_to_user($user, $supportuser, $subject, $message);
@@ -7455,14 +7455,14 @@ function check_php_version($version='5.2.4') {
           if (strpos($agent, 'AppleWebKit') === false) {
               return false;
           }
-          // Look for AppleWebKit, excluding strings with OmniWeb, Shiira and SimbianOS and any other mobile devices
+          // Look for AppleWebKit, excluding strings with OmniWeb, Shiira and SymbianOS and any other mobile devices
           if (strpos($agent, 'OmniWeb')) { // Reject OmniWeb
               return false;
           }
           if (strpos($agent, 'Shiira')) { // Reject Shiira
               return false;
           }
-          if (strpos($agent, 'SimbianOS')) { // Reject SimbianOS
+          if (strpos($agent, 'SymbianOS')) { // Reject SymbianOS
               return false;
           }
           if (strpos($agent, 'Android')) { // Reject Androids too
@@ -9298,6 +9298,13 @@ function get_performance_info() {
         $info['serverload'] = $server_load;
         $info['html'] .= '<span class="serverload">Load average: '.$info['serverload'].'</span> ';
         $info['txt'] .= "serverload: {$info['serverload']} ";
+    }
+
+    // Display size of session if session started
+    if (session_id()) {
+        $info['sessionsize'] = display_size(strlen(session_encode()));
+        $info['html'] .= '<span class="sessionsize">Session: ' . $info['sessionsize'] . '</span> ';
+        $info['txt'] .= "Session: {$info['sessionsize']} ";
     }
 
 /*    if (isset($rcache->hits) && isset($rcache->misses)) {

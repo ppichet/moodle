@@ -823,13 +823,12 @@ function close_window($delay = 0, $reloadopener = false) {
     }
 
     if ($reloadopener) {
-        $function = 'close_window_reloading_opener';
-    } else {
-        $function = 'close_window';
+        // Trigger the reload immediately, even if the reload is after a delay.
+        $PAGE->requires->js_function_call('window.opener.location.reload', array(true));
     }
-    echo '<p class="centerpara">' . get_string('windowclosing') . '</p>';
+    $OUTPUT->notification(get_string('windowclosing'), 'notifysuccess');
 
-    $PAGE->requires->js_function_call($function, null, false, $delay);
+    $PAGE->requires->js_function_call('close_window', array(new stdClass()), false, $delay);
 
     echo $OUTPUT->footer();
     exit;
@@ -959,6 +958,8 @@ function format_text_menu() {
  *      context     :   The context that will be used for filtering.
  *      overflowdiv :   If set to true the formatted text will be encased in a div
  *                      with the class no-overflow before being returned. Default false.
+ *      allowid     :   If true then id attributes will not be removed, even when
+ *                      using htmlpurifier. Default false.
  * </pre>
  *
  * @todo Finish documenting this function
@@ -1070,7 +1071,7 @@ function format_text($text, $format = FORMAT_MOODLE, $options = NULL, $courseid_
     switch ($format) {
         case FORMAT_HTML:
             if (!$options['noclean']) {
-                $text = clean_text($text, FORMAT_HTML);
+                $text = clean_text($text, FORMAT_HTML, $options);
             }
             $text = $filtermanager->filter_text($text, $context, array('originalformat' => FORMAT_HTML));
             break;
@@ -1093,7 +1094,7 @@ function format_text($text, $format = FORMAT_MOODLE, $options = NULL, $courseid_
         case FORMAT_MARKDOWN:
             $text = markdown_to_html($text);
             if (!$options['noclean']) {
-                $text = clean_text($text, FORMAT_HTML);
+                $text = clean_text($text, FORMAT_HTML, $options);
             }
             $text = $filtermanager->filter_text($text, $context, array('originalformat' => FORMAT_MARKDOWN));
             break;
@@ -1101,7 +1102,7 @@ function format_text($text, $format = FORMAT_MOODLE, $options = NULL, $courseid_
         default:  // FORMAT_MOODLE or anything else
             $text = text_to_html($text, null, $options['para'], $options['newlines']);
             if (!$options['noclean']) {
-                $text = clean_text($text, FORMAT_HTML);
+                $text = clean_text($text, FORMAT_HTML, $options);
             }
             $text = $filtermanager->filter_text($text, $context, array('originalformat' => $format));
             break;
@@ -1446,9 +1447,11 @@ function trusttext_active() {
  *
  * @param string $text The text to be cleaned
  * @param int $format deprecated parameter, should always contain FORMAT_HTML or FORMAT_MOODLE
+ * @param array $options Array of options; currently only option supported is 'allowid' (if true,
+ *   does not remove id attributes when cleaning)
  * @return string The cleaned up text
  */
-function clean_text($text, $format = FORMAT_HTML) {
+function clean_text($text, $format = FORMAT_HTML, $options = array()) {
     global $ALLOWED_TAGS, $CFG;
 
     if (empty($text) or is_numeric($text)) {
@@ -1465,7 +1468,7 @@ function clean_text($text, $format = FORMAT_HTML) {
     }
 
     if (!empty($CFG->enablehtmlpurifier)) {
-        $text = purify_html($text);
+        $text = purify_html($text, $options);
     } else {
     /// Fix non standard entity notations
         $text = fix_non_standard_entities($text);
@@ -1493,16 +1496,19 @@ function clean_text($text, $format = FORMAT_HTML) {
  *
  * @global object
  * @param string $text The (X)HTML string to purify
+ * @param array $options Array of options; currently only option supported is 'allowid' (if set,
+ *   does not remove id attributes when cleaning)
  */
-function purify_html($text) {
+function purify_html($text, $options = array()) {
     global $CFG;
 
     // this can not be done only once because we sometimes need to reset the cache
     $cachedir = $CFG->dataroot.'/cache/htmlpurifier';
     check_dir_exists($cachedir);
 
-    static $purifier = false;
-    if ($purifier === false) {
+    $type = !empty($options['allowid']) ? 'allowid' : 'normal';
+    static $purifiers = array();
+    if (empty($purifiers[$type])) {
         require_once $CFG->libdir.'/htmlpurifier/HTMLPurifier.safe-includes.php';
         $config = HTMLPurifier_Config::createDefault();
 
@@ -1523,6 +1529,10 @@ function purify_html($text) {
             $config->set('HTML.SafeEmbed', true);
         }
 
+        if ($type === 'allowid') {
+            $config->set('Attr.EnableID', true);
+        }
+
         $def = $config->getHTMLDefinition(true);
         $def->addElement('nolink', 'Block', 'Flow', array());                       // skip our filters inside
         $def->addElement('tex', 'Inline', 'Inline', array());                       // tex syntax, equivalent to $$xx$$
@@ -1531,6 +1541,9 @@ function purify_html($text) {
         $def->addAttribute('span', 'xxxlang', 'CDATA');                             // current problematic multilang
 
         $purifier = new HTMLPurifier($config);
+        $purifiers[$type] = $purifier;
+    } else {
+        $purifier = $purifiers[$type];
     }
 
     $multilang = (strpos($text, 'class="multilang"') !== false);
@@ -1967,7 +1980,7 @@ function get_separator() {
  * @return string|void If $return is false, returns nothing, otherwise returns a string of HTML.
  */
 function print_collapsible_region($contents, $classes, $id, $caption, $userpref = '', $default = false, $return = false) {
-    $output  = print_collapsible_region_start($classes, $id, $caption, $userpref, true, true);
+    $output  = print_collapsible_region_start($classes, $id, $caption, $userpref, $default, true);
     $output .= $contents;
     $output .= print_collapsible_region_end(true);
 
@@ -1983,21 +1996,20 @@ function print_collapsible_region($contents, $classes, $id, $caption, $userpref 
  * be clicked to expand or collapse the region. If JavaScript is off, then the region
  * will always be expanded.
  *
- * @global object
  * @param string $classes class names added to the div that is output.
  * @param string $id id added to the div that is output. Must not be blank.
  * @param string $caption text displayed at the top. Clicking on this will cause the region to expand or contract.
- * @param boolean $userpref the name of the user preference that stores the user's preferred default state.
+ * @param string $userpref the name of the user preference that stores the user's preferred default state.
  *      (May be blank if you do not wish the state to be persisted.
  * @param boolean $default Initial collapsed state to use if the user_preference it not set.
  * @param boolean $return if true, return the HTML as a string, rather than printing it.
  * @return string|void if $return is false, returns nothing, otherwise returns a string of HTML.
  */
-function print_collapsible_region_start($classes, $id, $caption, $userpref = false, $default = false, $return = false) {
+function print_collapsible_region_start($classes, $id, $caption, $userpref = '', $default = false, $return = false) {
     global $CFG, $PAGE, $OUTPUT;
 
     // Work out the initial state.
-    if (is_string($userpref)) {
+    if (!empty($userpref) and is_string($userpref)) {
         user_preference_allow_ajax_update($userpref, PARAM_BOOL);
         $collapsed = get_user_preferences($userpref, $default);
     } else {

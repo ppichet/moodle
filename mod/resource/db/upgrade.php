@@ -228,24 +228,22 @@ function xmldb_resource_upgrade($oldversion) {
 
         $instances = $DB->get_recordset_sql($sql);
         foreach ($instances as $instance) {
-            $context  = get_context_instance(CONTEXT_MODULE, $instance->cmid);
-            $component = 'mod_resource';
-            $filearea = 'content';
-            $itemid   = 0;
-            $filepath = file_correct_filepath(dirname($instance->mainfile));
-            $filename = basename($instance->mainfile);
-            file_set_sortorder($context->id, $component, $filearea, $itemid, $filepath, $filename, 1);
+            if (empty($instance->mainfile)) {
+                // weird
+                continue;
+            }
+            $context   = get_context_instance(CONTEXT_MODULE, $instance->cmid, MUST_EXIST);
+            $parts     = explode('/', $instance->mainfile);
+            $filename  = array_pop($parts);
+            $filepath  = implode('/', $parts);
+            file_set_sortorder($context->id, 'mod_resource', 'content', 0, $filepath, $filename, 1);
         }
         $instances->close();
 
      /// Define field mainfile to be dropped from resource
         $table = new xmldb_table('resource');
         $field = new xmldb_field('mainfile');
-
-    /// Conditionally launch drop field mainfile
-        if ($dbman->field_exists($table, $field)) {
-            $dbman->drop_field($table, $field);
-        }
+        $dbman->drop_field($table, $field);
 
     /// resource savepoint reached
         upgrade_mod_savepoint(true, 2009080501, 'resource');
@@ -255,6 +253,13 @@ function xmldb_resource_upgrade($oldversion) {
     if ($oldversion < 2010083000) {
         unset_config('resource_allowlocalfiles');
         upgrade_mod_savepoint(true, 2010083000, 'resource');
+    }
+
+    if ($oldversion < 2011022700) {
+        // refresh resource links breakage caused by invalid sortorder
+        require_once($CFG->dirroot . '/course/lib.php');
+        rebuild_course_cache(0, true);
+        upgrade_mod_savepoint(true, 2011022700, 'resource');
     }
 
     return true;
