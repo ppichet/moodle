@@ -319,7 +319,7 @@ class question_multichoice_qtype extends default_questiontype {
 
             // Print the answer text
             $a->text = quiz_rewrite_question_urls($answer->answer, 'pluginfile.php', $context->id, 'question', 'answertext',array( $state->attempt ,$state->question ), $answer->id);
-            $a->text = $this->number_in_style($key, $question->options->answernumbering) .$state->attempt.
+            $a->text = $this->number_in_style($key, $question->options->answernumbering).
                 format_text($a->text, $answer->answerformat, $formatoptions, $cmoptions->course);
 
             // Print feedback if feedback is on
