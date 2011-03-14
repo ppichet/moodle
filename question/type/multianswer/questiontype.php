@@ -161,18 +161,32 @@ class embedded_cloze_qtype extends default_questiontype {
 
     function save_question($authorizedquestion, $form) {
         $question = qtype_multianswer_extract_question($form->questiontext);
+        $questiontextitemid = $form->questiontext['itemid'] ;
+        foreach($question->options->questions as $wrapped) {
+            foreach($wrapped->answer as $key => $answer) {
+                if(is_array($answer)){
+                    if(preg_match('/(draftfile.php)/',$answer['text'])){
+                        $wrapped->answer[$key]['itemid']=$questiontextitemid ;
+                    }else {
+                        $wrapped->answer[$key]['itemid']='' ;
+                    }    
+                }
+                if(preg_match('/(draftfile.php)/',$wrapped->feedback[$key]['text'])){
+                    $wrapped->feedback[$key]['itemid']=$questiontextitemid ;
+                }else {
+                    $wrapped->feedback[$key]['itemid']='' ;
+                }    
+            }
+
+        }
+        
         if (isset($authorizedquestion->id)) {
             $question->id = $authorizedquestion->id;
         }
 
         $question->category = $authorizedquestion->category;
-        $form->course = $course; // To pass the course object to
-                                 // save_question_options, where it is
-                                 // needed to call type specific
-                                 // save_question methods.
         $form->defaultgrade = $question->defaultgrade;
         $form->questiontext = $question->questiontext;
-        $form->questiontextformat = 0;
         $form->options = clone($question->options);
         unset($question->options);
         return parent::save_question($question, $form);
@@ -268,6 +282,57 @@ class embedded_cloze_qtype extends default_questiontype {
         return $details;
     }
 
+    function compare_responses(&$question, $state, $teststate) {
+        // The default implementation performs a comparison of the response
+        // arrays. The ordering of the arrays does not matter.
+        // Question types may wish to override this (eg. to ignore trailing
+        // white space or to make "7.0" and "7" compare equal).
+
+        // In php neither == nor === compare arrays the way you want. The following
+        // ensures that the arrays have the same keys, with the same values.
+        global $QTYPES ;
+//    echo"<p>state<pre>";print_r($state);echo"<pre></p>";
+ //   echo"<p>teststate<pre>";print_r($teststate);echo"<pre></p>";
+   // exit;
+        $result = false;
+        foreach($question->options->questions as $key => $wrapped) {
+            if (!empty($wrapped)){
+                $stateforquestion = clone($state);
+                if(isset($state->responses[$key])){
+                    $stateforquestion->responses[''] = $state->responses[$key];
+                } else {
+                    $stateforquestion->responses[''] = '' ;    
+                }                    
+                $teststateforquestion = clone($teststate);
+                if(isset($state->responses[$key])){                
+                    $teststateforquestion->responses[''] = $teststate->responses[$key];
+                } else {
+                    $teststateforquestion->responses[''] = '' ;    
+                }                    
+                if (  $QTYPES[$wrapped->qtype]->compare_responses(&$wrapped, $stateforquestion, $teststateforquestion)) {
+                    $result = true ;
+ //   echo"<p>state true $key <pre>";print_r($stateforquestion);echo"<pre></p>";
+ //   echo"<p>teststate<pre>";print_r($teststateforquestion);echo"<pre></p>";
+                    // break ;
+                }else {
+ //   echo"<p>state false $key <pre>";print_r($stateforquestion);echo"<pre></p>";
+ //   echo"<p>teststate<pre>";print_r($teststateforquestion);echo"<pre></p>";
+                    $result = false ;
+                    break ;
+                }
+            }
+        }
+                
+                
+    /*            
+                $diff1 = array_diff_assoc($state->responses, $teststate->responses);
+        if (empty($diff1)) {
+            $diff2 = array_diff_assoc($teststate->responses, $state->responses);
+            $result =  empty($diff2);
+        }*/
+
+        return $result;
+    }
     function get_html_head_contributions(&$question, &$state) {
         global $PAGE;
         parent::get_html_head_contributions($question, $state);
@@ -277,7 +342,10 @@ class embedded_cloze_qtype extends default_questiontype {
 
     function print_question_formulation_and_controls(&$question, &$state, $cmoptions, $options) {
         global $QTYPES, $CFG, $USER, $OUTPUT, $PAGE;
-
+  //  echo"<p>state<pre>";print_r($state);echo"<pre></p>";
+  // echo"<p>question<pre>";print_r($question);echo"<pre></p>";     
+        $context = $this->get_context_by_category_id($question->category);
+        
         $readonly = empty($options->readonly) ? '' : 'readonly="readonly"';
         $disabled = empty($options->readonly) ? '' : 'disabled="disabled"';
         $formatoptions = new stdClass;
@@ -319,7 +387,6 @@ class embedded_cloze_qtype extends default_questiontype {
             } else {
                 $response = null;
             }
-            //   echo "<p> multianswer positionkey $positionkey response $response state  <pre>";print_r($state);echo "</pre></p>";
 
             // Determine feedback popup if any
             $popup = '';
@@ -388,13 +455,23 @@ class embedded_cloze_qtype extends default_questiontype {
                 }
 
                 if (!empty($chosenanswer->feedback)) {
-                    $feedback = s(str_replace(array("\\", "'"), array("\\\\", "\\'"), $feedback.$chosenanswer->feedback));
+ //  echo"<p>chosenanswer->feedback<pre>";print_r($chosenanswer->feedback);echo"<pre></p>";     
+                    $feedback = quiz_rewrite_question_urls($chosenanswer->feedback, 'pluginfile.php', $context->id, 'question', 'answerfeedback',array($state->attempt,$state->question ), $chosenanswer->id);// array($state->question$state->attempt
+       //     $a->text = $this->number_in_style($key, $question->options->answernumbering) .$state->attempt.
+        //        format_text($a->text, $answer->answerformat, $formatoptions, $cmoptions->course);
+                
+             //   $a->text = format_text($a->text."XX".$state->attempt, $mcanswer->answerformat, $formatoptions, $cmoptions->course);,FULLHTML,'1'
+                   // $chosenanswerfeedback =
+            //       echo"<p>chosenanswerfeedback $chosenanswerfeedback</p>";
+                    $feedback = s(str_replace(array("\\", "'"), array("\\\\", "\\'"), $feedback));
+            //       echo"<p>answerfeedback $feedback</p>";
+                    //  $feedback =  $feedback.$chosenanswerfeedback;
                     if  ($options->readonly && $options->correct_responses) {
                         $strfeedbackwrapped = get_string('correctanswerandfeedback', 'qtype_multianswer');
                     }else {
                         $strfeedbackwrapped = get_string('feedback', 'quiz');
                     }
-                    $popup = " onmouseover=\"return overlib('$feedback', STICKY, MOUSEOFF, CAPTION, '$strfeedbackwrapped', FGCOLOR, '#FFFFFF');\" ".
+                    $popup = " onmouseover=\"return overlib('$feedback', STICKY, MOUSEOFF, CAPTION, '$strfeedbackwrapped', FGCOLOR, '#FFFFFF');\" ". 
                              " onmouseout=\"return nd();\" ";
                 }
 
@@ -514,11 +591,12 @@ class embedded_cloze_qtype extends default_questiontype {
                 }
 
                 // Print the answer text: no automatic numbering
-
-                $a->text = format_text($mcanswer->answer, $mcanswer->answerformat, $formatoptions, $cmoptions->course);
+                $a->text = quiz_rewrite_question_urls($mcanswer->answer, 'pluginfile.php', $context->id, 'question', 'answertext',array($state->attempt,$state->question ), $mcanswer->id);   
+                $a->text = format_text($a->text, $mcanswer->answerformat, $formatoptions, $cmoptions->course);
 
                 // Print feedback if feedback is on
                 if (($options->feedback || $options->correct_responses) && ($checked )) { //|| $options->readonly
+                    $mcanswer->feedback = quiz_rewrite_question_urls($mcanswer->feedback, 'pluginfile.php', $context->id, 'question', 'answerfeedback',array($state->attempt,$state->question ), $mcanswer->id);
                     $a->feedback = format_text($mcanswer->feedback, $mcanswer->feedbackformat, $formatoptions, $cmoptions->course);
                 } else {
                     $a->feedback = '';
@@ -646,7 +724,23 @@ class embedded_cloze_qtype extends default_questiontype {
         }
         return $responses;
     }
+    function check_file_access($question, $state, $options, $contextid, $component,
+            $filearea, $args) {
+        if ($component == 'question' && $filearea == 'answerfeedback') {
+            return $options->feedback ; // ;true
+        } 
+        else if ($component == 'question' && $filearea == 'answertext') {
+            return true ;// array_key_exists($itemid,$question->options->questions);
+        } else {
+            return parent::check_file_access($question, $state, $options, $contextid, $component,
+                    $filearea, $args);
+        }
+    }           
+ /*   function move_files($questionid, $oldcontextid, $newcontextid) {
+        $fs = get_file_storage();
 
+        parent::move_files($questionid, $oldcontextid, $newcontextid);
+    }*/
     /**
      * @param object $question
      * @return mixed either a integer score out of 1 that the average random
@@ -713,7 +807,7 @@ define("ANSWER_ALTERNATIVE_FRACTION_REGEX",
        '=|%(-?[0-9]+)%');
 // for the syntax '(?<!' see http://www.perl.com/doc/manual/html/pod/perlre.html#item_C
 define("ANSWER_ALTERNATIVE_ANSWER_REGEX",
-        '.+?(?<!\\\\|&|&amp;)(?=[~#}]|$)');
+        '.+?(?<!\\\\|&|&amp;)(?=[~#}]|$)'); // +
 define("ANSWER_ALTERNATIVE_FEEDBACK_REGEX",
         '.*?(?<!\\\\)(?=[~}]|$)');
 define("ANSWER_ALTERNATIVE_REGEX",
@@ -778,6 +872,9 @@ function qtype_multianswer_extract_question($text) {
         $wrapped->generalfeedback['text'] = '';
         $wrapped->generalfeedback['format'] = '1';
         $wrapped->generalfeedback['itemid'] = '';
+        $wrapped->questiontext['text'] = $answerregs[0];
+        $wrapped->questiontext['format'] = $question->questiontext['format'] ;
+        $wrapped->questiontext['itemid'] = $question->questiontext['itemid'] ;
         if (isset($answerregs[ANSWER_REGEX_NORM])&& $answerregs[ANSWER_REGEX_NORM]!== ''){
             $wrapped->defaultgrade = $answerregs[ANSWER_REGEX_NORM];
         } else {
@@ -850,9 +947,6 @@ function qtype_multianswer_extract_question($text) {
         $wrapped->fraction = array();
         $wrapped->feedback = array();
         $wrapped->shuffleanswers = 1;
-        $wrapped->questiontext['text'] = $answerregs[0];
-        $wrapped->questiontext['format'] = 0 ;
-        $wrapped->questiontext['itemid'] = '' ;
         $answerindex = 0 ;
 
         $remainingalts = $answerregs[ANSWER_REGEX_ALTERNATIVES];
@@ -868,14 +962,11 @@ function qtype_multianswer_extract_question($text) {
                 $feedback = html_entity_decode($altregs[ANSWER_ALTERNATIVE_REGEX_FEEDBACK], ENT_QUOTES, 'UTF-8');
                 $feedback = str_replace('\}', '}', $feedback);
                 $wrapped->feedback["$answerindex"]['text'] = str_replace('\#', '#', $feedback);
-                $wrapped->feedback["$answerindex"]['format'] = '1';
-                $wrapped->feedback["$answerindex"]['itemid'] = '';
             } else {
                 $wrapped->feedback["$answerindex"]['text'] = '';
-                $wrapped->feedback["$answerindex"]['format'] = '1';
-                $wrapped->feedback["$answerindex"]['itemid'] = '1';
-
             }
+            $wrapped->feedback["$answerindex"]['format'] = $question->questiontext['format'];
+            $wrapped->feedback["$answerindex"]['itemid'] = '';            
             if (!empty($answerregs[ANSWER_REGEX_ANSWER_TYPE_NUMERICAL])
                     && preg_match('~'.NUMERICAL_ALTERNATIVE_REGEX.'~', $altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER], $numregs)) {
                 $wrapped->answer[] = $numregs[NUMERICAL_CORRECT_ANSWER];
@@ -890,7 +981,14 @@ function qtype_multianswer_extract_question($text) {
                 $answer = html_entity_decode($altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER], ENT_QUOTES, 'UTF-8');
                 $answer = str_replace('\}', '}', $answer);
                 $wrapped->answer["$answerindex"] = str_replace('\#', '#', $answer);
-            }
+                if($wrapped->qtype == 'multichoice' && $wrapped->layout > 0) {
+                    $wanswer = array('');
+                    $wanswer['text'] = $wrapped->answer["$answerindex"];                
+                    $wanswer['format'] = $question->questiontext['format'] ;
+                    $wanswer['itemid'] = ''  ;
+                    $wrapped->answer["$answerindex"]=$wanswer ;                                                            
+                }
+            }   
             $tmp = explode($altregs[0], $remainingalts, 2);
             $remainingalts = $tmp[1];
             $answerindex++ ;
@@ -900,10 +998,6 @@ function qtype_multianswer_extract_question($text) {
         $question->options->questions[$positionkey] = clone($wrapped);
         $question->questiontext['text'] = implode("{#$positionkey}",
                     explode($answerregs[0], $question->questiontext['text'], 2));
-//    echo"<p>questiontext 2 <pre>";print_r($question->questiontext);echo"<pre></p>";
     }
-//    echo"<p>questiontext<pre>";print_r($question->questiontext);echo"<pre></p>";
-    $question->questiontext = $question->questiontext;
-//    echo"<p>question<pre>";print_r($question);echo"<pre></p>";
     return $question;
 }

@@ -850,7 +850,7 @@ function question_move_questions_to_category($questionids, $newcategoryid) {
             SELECT q.id, q.qtype, qc.contextid
               FROM {question} q
               JOIN {question_categories} qc ON q.category = qc.id
-             WHERE  q.id $questionidcondition", $params);
+             WHERE  q.id $questionidcondition OR q.parent $questionidcondition",array_merge($params, $params));
     foreach ($questions as $question) {
         if ($newcontextid != $question->contextid) {
             $QTYPES[$question->qtype]->move_files($question->id,

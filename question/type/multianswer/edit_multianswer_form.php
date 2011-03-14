@@ -56,7 +56,6 @@ class question_edit_multianswer_form extends question_edit_form {
 
     function definition_inner(&$mform) {
         $mform->addElement('hidden', 'reload', 1);
-   //     $mform->addElement('hidden', 'generalfeedback','');
         $mform->setType('reload', PARAM_INT);
         $question_type_names = question_type_menu();
 
@@ -66,8 +65,6 @@ class question_edit_multianswer_form extends question_edit_form {
 
         // display the questions from questiontext;
         if  (  "" != optional_param('questiontext','', PARAM_RAW)) {
-                //   echo "<p> optional_param('questiontext' <pre>";print_r(optional_param('questiontext','', PARAM_RAW));echo "</pre></p>";
-
             $this->questiondisplay = fullclone(qtype_multianswer_extract_question(optional_param('questiontext','', PARAM_RAW))) ;
 
         }else {
@@ -81,7 +78,6 @@ class question_edit_multianswer_form extends question_edit_form {
                         foreach($subquestion->options->answers as $ans){
                             $subquestion->answer[]=$ans->answer ;
                         }
-                        //  $subquestion->answer = fullclone($subquestion->options->answers);
                     }
                 }
             }else {
@@ -113,10 +109,6 @@ class question_edit_multianswer_form extends question_edit_form {
         }else{
             $countsubquestions =$countsavedsubquestions ;
         }
-                 //  echo "<p> count subquestion $countsubquestions <pre>";print_r($this->savedquestiondisplay);echo "</pre></p>";
-        //       //     echo "<p> saved question $countsubquestions <pre>";print_r($this->questiondisplay);echo "</pre></p>";
-
-
         $mform->addElement('submit', 'analyzequestion', get_string('decodeverifyquestiontext','qtype_multianswer'));
         $mform->registerNoSubmitButton('analyzequestion');
         if ( $this->reload ){
@@ -154,7 +146,7 @@ class question_edit_multianswer_form extends question_edit_form {
                 }
 
                 if ($this->questiondisplay->options->questions[$sub]->qtype =='multichoice'   ) {
-                    $mform->addElement('static', 'sub_'.$sub."_".'layout', get_string('layout', 'qtype_multianswer'),array('cols'=>60, 'rows'=>1)) ;//, $gradeoptions);
+                    $mform->addElement('static', 'sub_'.$sub."_".'layout', get_string('layout', 'qtype_multianswer'),array('cols'=>60, 'rows'=>1)) ;
                 }
                 foreach ($this->questiondisplay->options->questions[$sub]->answer as $key =>$ans) {
 
@@ -302,7 +294,11 @@ class question_edit_multianswer_form extends question_edit_form {
                             if ( $subquestion->qtype == 'numerical' && $key == 0 ) {
                                 $default_values[$prefix.'tolerance['.$key.']']  = $subquestion->tolerance[0] ;
                             }
-                            $trimmedanswer = trim($answer);
+                            if (is_array($answer)) {
+                                $trimmedanswer = trim($answer['text']);
+                            } else {
+                                $trimmedanswer = trim($answer);
+                            }
                             if ($trimmedanswer !== '') {
                                 $answercount++;
                                 if ($subquestion->qtype == 'numerical' && !(is_numeric($trimmedanswer) || $trimmedanswer == '*')) {
@@ -315,8 +311,11 @@ class question_edit_multianswer_form extends question_edit_form {
                                     $maxfraction = $subquestion->fraction[$key] ;
                                 }
                             }
-
-                            $default_values[$prefix.'answer['.$key.']']  = htmlspecialchars ($answer);
+                            if (is_array($answer)) {                            
+                                $default_values[$prefix.'answer['.$key.']']  = $trimmedanswer;
+                            }else {
+                                $default_values[$prefix.'answer['.$key.']']  = htmlspecialchars ($trimmedanswer);
+                            }                            
                         }
                         if ($answercount == 0) {
                             if ($subquestion->qtype == 'multichoice' ) {
@@ -328,12 +327,16 @@ class question_edit_multianswer_form extends question_edit_form {
                         if ($maxgrade == false) {
                             $this->_form->setElementError($prefix.'fraction[0]' ,get_string('fractionsnomax', 'question'));
                         }
-                        foreach ($subquestion->feedback as $key=>$answer) {
-
-                            $default_values[$prefix.'feedback['.$key.']']  = htmlspecialchars ($answer['text']);
+                        
+                        foreach ($subquestion->feedback as $key=>$afeedback) {
+                            if (is_array($afeedback)) {
+                                $default_values[$prefix.'feedback['.$key.']']  = $afeedback['text'];
+                            }else {
+                                $default_values[$prefix.'feedback['.$key.']']  = htmlspecialchars($afeedback);
+                            }
                         }
-                        foreach ( $subquestion->fraction as $key=>$answer) {
-                            $default_values[$prefix.'fraction['.$key.']']  = $answer;
+                        foreach ( $subquestion->fraction as $key=>$fraction) {
+                            $default_values[$prefix.'fraction['.$key.']']  =  $fraction ;
                         }
 
 
@@ -370,7 +373,11 @@ class question_edit_multianswer_form extends question_edit_form {
                             $storemess = " STORED QTYPE ".$question_type_names[$this->savedquestiondisplay->options->questions[$sub]->qtype];
                         }
                     foreach ( $subquestion->answer as $key=>$answer) {
-                        $trimmedanswer = trim($answer);
+                        if (is_array($answer)) {
+                            $trimmedanswer = trim($answer['text']);
+                        }else{
+                            $trimmedanswer = trim($answer);
+                        }    
                         if ($trimmedanswer !== '') {
                             $answercount++;
                             if ($subquestion->qtype =='numerical' && !(is_numeric($trimmedanswer) || $trimmedanswer == '*')) {

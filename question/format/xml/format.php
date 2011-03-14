@@ -356,7 +356,57 @@ class qformat_xml extends qformat_default {
         $questiontext['format'] = '1';
         $questiontext['itemid'] = ''; 
         $qo = qtype_multianswer_extract_question($questiontext);
+        $qo->questiontextformat = $this->trans_format(
+                $this->getpath($questions, array('#','questiontext',0,'@','format'), 'moodle_auto_format'));
+        $qo->questiontextfiles = array();
 
+        // restore files in questiontext
+        $files = $this->getpath($questions, array('#', 'questiontext', 0, '#','file'), array(), false);
+        foreach ($files as $file) {
+            $data = new stdclass;
+            $data->content = $file['#'];
+            $data->encoding = $file['@']['encoding'];
+            $data->name = $file['@']['name'];
+            $qo->questiontextfiles[] = $data;
+        }
+
+        // Backwards compatibility, deal with the old image tag.
+        $filedata = $this->getpath($questions, array('#', 'image_base64', '0', '#'), null, false);
+        $filename = $this->getpath($questions, array('#', 'image', '0', '#'), null, false);
+        if ($filedata && $filename) {
+            $data = new stdclass;
+            $data->content = $filedata;
+            $data->encoding = 'base64';
+            $data->name = $filename;
+            $qo->questiontextfiles[] = $data;
+            $qo->questiontext .= ' <img src="@@PLUGINFILE@@/' . $filename . '" />';
+        }
+        //$qo->answerfiles[] = $data;
+        foreach ($qo->options->questions as $wrapped) {
+            foreach($qo->questiontextfiles as $file ){
+                if(preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/',$wrapped->questiontext['text'])){
+                    $wrapped->questiontext['files'][]=$file ;
+                }    
+            }
+        }
+        foreach($qo->options->questions as $wrapped) {
+            foreach($wrapped->answer as $key => $answer) {
+                if(is_array($answer)){
+                    foreach($qo->questiontextfiles as $file ){
+                        if(preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/',$answer['text'])){
+                            $wrapped->answer[$key]['files'][]=$file ;
+                        }    
+                    }
+                }
+                foreach($qo->questiontextfiles as $file ){
+                    if(preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/',$wrapped->feedback[$key]['text'])){
+                        $wrapped->feedback[$key]['files'][]=$file ;
+                    }
+                }                  
+            }
+        }
+                    
+            
         // 'header' parts particular to multianswer
         $qo->qtype = MULTIANSWER;
         $qo->course = $this->course;
@@ -378,7 +428,6 @@ class qformat_xml extends qformat_default {
             $qo->name = $this->import_text( $questions['#']['name'][0]['#']['text'] );
         }
         $qo->questiontext =  $qo->questiontext['text'] ;
-        $qo->questiontextformat = '' ;
 
         return $qo;
     }
@@ -1101,12 +1150,15 @@ class qformat_xml extends qformat_default {
         } else {
             // for Cloze type only
             $name_text = $this->writetext( $question->name );
-            $question_text = $this->writetext( $question->questiontext );
+            $qtformat = $this->get_format($question->questiontextformat);
+            $question_text = $this->writetext($question->questiontext);
+            $question_text_files = $this->writefiles($question->questiontextfiles);
             $generalfeedback = $this->writetext( $question->generalfeedback );
             $expout .= "  <question type=\"$question_type\">\n";
             $expout .= "    <name>$name_text</name>\n";
-            $expout .= "    <questiontext>\n";
+            $expout .= "    <questiontext format=\"$qtformat\">\n";
             $expout .= $question_text;
+            $expout .= $question_text_files;
             $expout .= "    </questiontext>\n";
             $expout .= "    <generalfeedback>\n";
             $expout .= $generalfeedback;
