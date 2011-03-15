@@ -300,7 +300,7 @@ class question_edit_calculatedmulti_form extends question_edit_form {
         if ( count($mandatorydatasets )==0){
             //  $errors['questiontext']=get_string('atleastonewildcard', 'qtype_datasetdependent');
             foreach ($answers as $key => $answer){
-                $errors['answer['.$key.']'] = get_string('atleastonewildcard', 'qtype_datasetdependent');
+                $errors['answer['.$key.']'] = get_string('atleastonewildcard', 'qtype_calculated');
             }
         }
         if ($data['multichoice']== 1 ){
