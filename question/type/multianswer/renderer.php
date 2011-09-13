@@ -123,6 +123,10 @@ abstract class qtype_multianswer_subq_renderer_base extends qtype_renderer {
         }
 
         $feedback = array();
+        if ($feedbacktext != ('')) {
+            $feedback[] = $feedbacktext;
+        }
+
         if ($options->correctness) {
             if (is_null($fraction)) {
                 $state = question_state::$gaveup;
