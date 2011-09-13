@@ -123,7 +123,7 @@ abstract class qtype_multianswer_subq_renderer_base extends qtype_renderer {
         }
 
         $feedback = array();
-        if ($feedbacktext != ('')) {
+        if ($feedbacktext != '') {
             $feedback[] = $feedbacktext;
         }
 
@@ -147,7 +147,10 @@ abstract class qtype_multianswer_subq_renderer_base extends qtype_renderer {
             $a->max =  format_float($subq->maxmark, $options->markdp);
             $feedback[] = get_string('markoutofmax', 'question', $a);
         }
-
+        
+        if (empty($feedback)) {
+            return "";
+        }
         return html_writer::tag('span', implode('<br />', $feedback),
                 array('class' => 'feedbackspan accesshide'));
     }
