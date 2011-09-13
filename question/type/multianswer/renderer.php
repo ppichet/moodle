@@ -123,6 +123,7 @@ abstract class qtype_multianswer_subq_renderer_base extends qtype_renderer {
         }
 
         $feedback = array();
+
         if ($feedbacktext != '') {
             $feedback[] = $feedbacktext;
         }
