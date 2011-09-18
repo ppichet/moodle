@@ -1516,7 +1516,16 @@ class qtype_calculated extends question_type {
             $sql = "SELECT a.*
                 FROM {question_dataset_definitions} a, {question_datasets} b
                WHERE a.id = b.datasetdefinition AND a.type = '1' AND b.question = ? AND a.name = ?";
-            $currentdatasetdef = $DB->get_record_sql($sql, array($form->id, $name));
+            $currentdatasetdefs = $DB->get_records_sql($sql, array($form->id, $name));
+            $currentdatasetdef = '' ;
+            if (!empty($currentdatasetdefs)) {
+                foreach($currentdatasetdefs as $key => $datasetdef ){
+                    if($datasetdef->name == $name){
+                        $currentdatasetdef = $datasetdef ;
+                        break;
+                    }
+                }
+            }
             if (!$currentdatasetdef) {
                 $currentdatasetdef->type = '0';
             }
