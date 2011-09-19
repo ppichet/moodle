@@ -130,16 +130,10 @@ abstract class qtype_calculated_question_helper {
                 $question->datasetloader->get_values($variant),
                 get_string('decsep', 'langconfig'));
         $question->calculate_all_expressions();
-
+        $i= 0; 
         foreach ($question->vs->get_values() as $name => $value) {
-            $nam = '';
-            $id = '{}' ;
-            for ($i= 0; $i< strlen($name);$i++){
-                $c = substr($name,$i,1);
-                $nam .= $c;   
-                $id .= bin2hex($c);
-            }
-            $step->set_qt_var(substr('_var_'.$nam.$id,0,32), $value);
+            $step->set_qt_var(substr('_var_'.$name.'{}'.$i,0,32), $value);
+            $i++;
         }
     }
 
@@ -151,11 +145,9 @@ abstract class qtype_calculated_question_helper {
             if (substr($name, 0, 5) === '_var_') {
                 $nam = substr($name, 5);
                 if(strpos($nam,'{}')){
-                    $nam1 = substr($nam,0,strpos($nam,'{}'));
-                }else{
-                    $nam1=$nam ;
+                    $nam = substr($nam,0,strpos($nam,'{}'));
                 }
-                $values[$nam1] = $value;
+                $values[$nam] = $value;
             }
         }
         $question->vs = new qtype_calculated_variable_substituter(
