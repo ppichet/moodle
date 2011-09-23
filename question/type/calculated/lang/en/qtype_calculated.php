@@ -81,6 +81,7 @@ $string['keptcategory1'] = 'will use the same existing shared dataset as before'
 $string['keptcategory2'] = 'a file from the same category reusable set of files as before';
 $string['keptcategory3'] = 'a link from the same category reusable set of links as before';
 $string['keptlocal1'] = 'will use the same existing private dataset as before';
+$string['keptlocalempty1'] = 'will use an existing private empty dataset';
 $string['keptlocal2'] = 'a file from the same question private set of files as before';
 $string['keptlocal3'] = 'a link from the same question private set of links as before';
 $string['lastitem(s)'] = 'last items(s)';
