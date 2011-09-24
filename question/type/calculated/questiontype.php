@@ -1523,11 +1523,11 @@ class qtype_calculated extends question_type {
             $key = "$type-0-$name";
             if ($currentdatasetdef->type == $type
                     and $currentdatasetdef->category == 0) {
-                        if($currentdatasetdef->itemcount > 0 ){
-                            $options[$key] = get_string($prefix."keptlocal$type", $langfile);
-                        }else {
-                            $options[$key] = get_string($prefix."keptlocalempty$type", $langfile);
-                        }
+                if ($currentdatasetdef->itemcount > 0) {
+                    $options[$key] = get_string($prefix."keptlocal$type", $langfile);
+                } else {
+                    $options[$key] = get_string($prefix."keptlocalempty$type", $langfile);
+                }
             } else {
                 $options[$key] = get_string($prefix."newlocal$type", $langfile);
             }
