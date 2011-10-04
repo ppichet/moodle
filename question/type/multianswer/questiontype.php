@@ -77,7 +77,6 @@ class qtype_multianswer extends question_type {
 
         $question->hints = $DB->get_records('question_hints',
                 array('questionid' => $question->id), 'id ASC');
-
         return true;
     }
 
