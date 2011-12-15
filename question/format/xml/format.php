@@ -440,7 +440,43 @@ class qformat_xml extends qformat_default {
         $qo->name = $this->import_text($question['#']['name'][0]['#']['text']);
         $qo->questiontextformat = $questiontext['format'];
         $qo->questiontext = $qo->questiontext['text'];
-        $qo->questiontextfiles = array();
+        $qo->questiontextfiles = $this->import_files($this->getpath($question,
+                array('#', 'questiontext', 0, '#', 'file'), array(), false));
+        // Backwards compatibility, deal with the old image tag.
+        $filedata = $this->getpath($question, array('#', 'image_base64', '0', '#'), null, false);
+        $filename = $this->getpath($question, array('#', 'image', '0', '#'), null, false);
+        if ($filedata && $filename) {
+            $data = new stdClass();
+            $data->content = $filedata;
+            $data->encoding = 'base64';
+            // Question file areas don't support subdirs, so convert path to filename if necessary.
+            $data->name = clean_param(str_replace('/', '_', $filename), PARAM_FILE);
+            $qo->questiontextfiles[] = $data;
+            $qo->questiontext .= ' <img src="@@PLUGINFILE@@/' . $data->name . '" />';
+        }
+        foreach ($qo->options->questions as $wrapped) {
+            foreach ($qo->questiontextfiles as $file) {
+                if (preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/', $wrapped->questiontext['text'])) {
+                    $wrapped->questiontext['files'][]=$file;
+                }
+            }
+        }
+        foreach ($qo->options->questions as $wrapped) {
+            foreach ($wrapped->answer as $key => $answer) {
+                if (is_array($answer)) {
+                    foreach ($qo->questiontextfiles as $file) {
+                        if (preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/', $answer['text'])) {
+                            $wrapped->answer[$key]['files'][]=$file;
+                        }
+                    }
+                }
+                foreach ($qo->questiontextfiles as $file) {
+                    if (preg_match('/@@PLUGINFILE@@\/('.$file->name.')["]/', $wrapped->feedback[$key]['text'])) {
+                        $wrapped->feedback[$key]['files'][]=$file;
+                    }
+                }
+            }
+        }
 
         // restore files in generalfeedback
         $qo->generalfeedback = $this->getpath($question,

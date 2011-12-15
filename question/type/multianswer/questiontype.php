@@ -170,6 +170,25 @@ class qtype_multianswer extends question_type {
 
     public function save_question($authorizedquestion, $form) {
         $question = qtype_multianswer_extract_question($form->questiontext);
+        $questiontextitemid = $form->questiontext['itemid'];
+        foreach ($question->options->questions as $wrapped) {
+            foreach ($wrapped->answer as $key => $answer) {
+                if (is_array($answer)) {
+                    if (preg_match('/(draftfile.php)/', $answer['text'])) {
+                        $wrapped->answer[$key]['itemid']=$questiontextitemid;
+                    } else {
+                        $wrapped->answer[$key]['itemid']='';
+                    }
+                }
+                if (preg_match('/(draftfile.php)/', $wrapped->feedback[$key]['text'])) {
+                    $wrapped->feedback[$key]['itemid']=$questiontextitemid;
+                } else {
+                    $wrapped->feedback[$key]['itemid']='';
+                }
+            }
+
+        }
+
         if (isset($authorizedquestion->id)) {
             $question->id = $authorizedquestion->id;
         }
@@ -188,6 +207,18 @@ class qtype_multianswer extends question_type {
         $DB->delete_records('question_multianswer', array('question' => $questionid));
 
         parent::delete_question($questionid, $contextid);
+    }
+
+    public function check_file_access($question, $state, $options, $contextid, $component,
+            $filearea, $args) {
+        if ($component == 'question' && $filearea == 'answerfeedback') {
+            return $options->feedback; // ;true
+        } else if ($component == 'question' && $filearea == 'answertext') {
+            return true;// array_key_exists($itemid,$question->options->questions);
+        } else {
+            return parent::check_file_access($question, $state, $options, $contextid, $component,
+                    $filearea, $args);
+        }
     }
 
     protected function initialise_question_instance($question, $questiondata) {
@@ -299,6 +330,9 @@ function qtype_multianswer_extract_question($text) {
         $wrapped->generalfeedback['text'] = '';
         $wrapped->generalfeedback['format'] = FORMAT_HTML;
         $wrapped->generalfeedback['itemid'] = '';
+        $wrapped->questiontext['text'] = $answerregs[0];
+        $wrapped->questiontext['format'] = $question->questiontext['format'];
+        $wrapped->questiontext['itemid'] = $question->questiontext['itemid'];
         if (isset($answerregs[ANSWER_REGEX_NORM])&& $answerregs[ANSWER_REGEX_NORM]!== '') {
             $wrapped->defaultmark = $answerregs[ANSWER_REGEX_NORM];
         } else {
@@ -373,9 +407,6 @@ function qtype_multianswer_extract_question($text) {
         $wrapped->answer   = array();
         $wrapped->fraction = array();
         $wrapped->feedback = array();
-        $wrapped->questiontext['text'] = $answerregs[0];
-        $wrapped->questiontext['format'] = FORMAT_HTML;
-        $wrapped->questiontext['itemid'] = '';
         $answerindex = 0;
 
         $remainingalts = $answerregs[ANSWER_REGEX_ALTERNATIVES];
