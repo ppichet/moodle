@@ -164,15 +164,302 @@ function qformat_webct_convert_formula($formula) {
  * Web CT question importer.
  *
  * @copyright  2004 ASP Consulting http://www.asp-consulting.net
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later webct_import
  */
 class qformat_webct extends qformat_default {
 
+    private $filebase = NULL;
+    private $temp_dir = '';
     function provide_import() {
       return true;
     }
+    public function can_import_file($file) {
+        $mimetypes = array(
+            mimeinfo('type', '.txt'),
+            mimeinfo('type', '.zip')
+        );
+        return in_array($file->get_mimetype(), $mimetypes);
+    }
+//Function to check and create the needed dir to unzip file to
+    public function check_and_create_import_dir($unique_code) {
 
-    protected function readquestions($lines) {
+        global $CFG;
+        $status = $this->check_dir_exists($CFG->dataroot."/temp", true);
+        if ($status) {
+            $status = $this->check_dir_exists($CFG->dataroot."/temp/webct_import", true);
+        }
+        if ($status) {
+            $status = $this->check_dir_exists($CFG->dataroot."/temp/webct_import/".$unique_code, true);
+        }
+        return $status;
+    }
+    public function clean_temp_dir($dir='') {
+        global $CFG;
+        // for now we will just say everything happened okay note
+        // that a mess may be piling up in $CFG->dataroot/temp/bbquiz_import
+        // TODO return true at top of the function renders all the following code useless
+        return true;
+        if ($dir == '') {
+            $dir = $this->temp_dir;
+        }
+        $slash = "/";
+        // Create arrays to store files and directories
+        $dir_files = array();
+        $dir_subdirs = array();
+        // Make sure we can delete it
+        chmod($dir, $CFG->directorypermissions);
+        if ((($handle = opendir($dir))) == false) {
+            // The directory could not be opened
+            return false;
+        }
+        // Loop through all directory entries, and construct two temporary arrays containing files and sub directories
+        while (false !== ($entry = readdir($handle))) {
+            if (is_dir($dir. $slash .$entry) && $entry != ".." && $entry != ".") {
+                $dir_subdirs[] = $dir. $slash .$entry;
+            } else if ($entry != ".." && $entry != ".") {
+                $dir_files[] = $dir. $slash .$entry;
+            }
+        }
+        // Delete all files in the curent directory return false and halt if a file cannot be removed
+        $countdir_files = count($dir_files);
+        for ($i=0; $i<$countdir_files; $i++) {
+            chmod($dir_files[$i], $CFG->directorypermissions);
+            if (((unlink($dir_files[$i]))) == false) {
+                return false;
+            }
+        }
+        // Empty sub directories and then remove the directory
+        $countdir_subdirs = count($dir_subdirs);
+        for ($i=0; $i<$countdir_subdirs; $i++) {
+            chmod($dir_subdirs[$i], $CFG->directorypermissions);
+            if ($this->clean_temp_dir($dir_subdirs[$i]) == false) {
+                return false;
+            } else {
+                if (rmdir($dir_subdirs[$i]) == false) {
+                    return false;
+                }
+            }
+        }
+        // Close directory
+        closedir($handle);
+        if (rmdir($this->temp_dir) == false) {
+            return false;
+        }
+        // Success, every thing is gone return true
+        return true;
+    }
+    //Function to check if a directory exists and, optionally, create it
+    public function check_dir_exists($dir, $create=false) {
+        global $CFG;
+        $status = true;
+        if (!is_dir($dir)) {
+            if (!$create) {
+                $status = false;
+            } else {
+                umask(0000);
+                $status = mkdir ($dir, $CFG->directorypermissions);
+            }
+        }
+        return $status;
+    }
+    public function importpostprocess() {
+        /// Does any post-processing that may be desired
+        /// Argument is a simple array of question ids that
+        /// have just been added.
+        // need to clean up temporary directory
+        return $this->clean_temp_dir();
+    }
+    
+    
+    
+           /**
+    * find all images tags in html text
+    * if the source is a valid file inside
+    * the unzipped files from the import
+    * then it is added to the result
+    * @param string text containing urls to files
+    * @return array of files
+    */
+    public function process_img_tags($text) {
+        GLOBAL $OUTPUT;
+        // step one, find all file refs then add to array
+        $files = array();
+        preg_match_all('|<img[^>]+src="([^"]*)"|i', $text, $out); // find all src refs
+        foreach( $out[1] as $path ) {
+            if (strncmp($path, "http:", 5) != 0) {
+                $fullpath = $this->filebase.'/'.$path; // full path to tmp working area
+                $filename = basename($path);
+                if(is_readable($fullpath)) {
+                    $data = new stdclass;
+                    $data->content = base64_encode(file_get_contents($fullpath));
+                    $data->encoding = 'base64';
+                    $data->name = $filename;
+                    $files[] = $data;
+                } else {
+                    echo $OUTPUT->notification(get_string('imagenotfound', 'qformat_blackboard_six', $fullpath));
+                }
+            }
+        }
+        return $files;
+    }
+    
+       function copy_file_to_course($filename) {
+        global $CFG, $COURSE;
+        $filename = str_replace('\\', '/', $filename);
+        $fullpath = $this->temp_dir.'/res00001/'.$filename;
+        $basename = basename($filename);
+        $copy_to = $CFG->dataroot.'/'.$COURSE->id.'/webct_import';
+        if ($this->check_dir_exists($copy_to, true)) {
+            if (is_readable($fullpath)) {
+                $copy_to.= '/'.$basename;
+                if (!copy($fullpath, $copy_to)) {
+                    return false;
+                } else {
+                    return $copy_to;
+            }
+            }
+        } else {
+            return false;
+        }
+    }
+     function readdata($filename) {
+        /// Returns complete file with an array, one item per line
+        global $CFG;
+        // if the extension is .dat we just return that,
+        // if .zip we unzip the file and get the data
+        $ext = substr($this->realfilename, strpos($this->realfilename, '.'), strlen($this->realfilename)-1);
+        if ($ext=='.txt') {
+            if (!is_readable($filename)) {
+                print_error('filenotreadable', 'error');
+            }
+            return file($filename);
+        }
+        $unique_code = time();
+        $temp_dir = $CFG->dataroot."/temp/webct_import/".$unique_code;
+        $this->temp_dir = $temp_dir;
+        $this->filebase = $temp_dir;
+        // Create arrays to store files and directories
+        $dir_files = array();
+        $dir_subdirs = array();
+        if ($this->check_and_create_import_dir($unique_code)) {
+            echo "<p> check and create OK $filename $temp_dir </p>";
+            if (is_readable($filename)) {
+                if (!copy($filename, "$temp_dir/webct.zip")) {
+                    print_error('cannotcopybackup', 'question');
+            }
+                if (unzip_file("$temp_dir/webct.zip", '', false)) {
+                    if ($dir == '') {
+                        $dir = $this->temp_dir;
+                    }
+                    $slash = "/";
+             
+                    if ((($handle = opendir($dir))) == false) {
+                        // The directory could not be opened
+                        return false;
+            }
+            
+                    // Loop through all directory entries, and construct two temporary arrays containing files and sub directories
+                    while (false !== ($entry = readdir($handle))) {
+                        if (is_dir($dir. $slash .$entry) && $entry != ".." && $entry != ".") {
+                            $dir_subdirs[] = $dir. $slash .$entry;
+                        } else if ($entry != ".." && $entry != ".") {
+                            $dir_files[] = $dir. $slash .$entry;
+                        }
+                    }
+                    echo "<p> check and create OK $filename $temp_dir <pre>";print_r($dir_subdirs);echo "</pre></p>";
+                    echo "<p> check and create OK $filename $temp_dir <pre>";print_r($dir_files);echo "</pre></p>";
+                    if ((($handle = opendir($dir_subdirs[0]))) == false) {
+                        // The directory could not be opened
+                        return false;
+            }
+                    while (false !== ($entry = readdir($handle))) {
+                        if (is_dir($dir_subdirs[0]. $slash .$entry) && $entry != ".." && $entry != ".") {
+                            $dir_subdirs[] = $dir_subdirs[0]. $slash .$entry;
+                        } else if ($entry != ".." && $entry != ".") {
+                            $dir_files[] = $dir_subdirs[0]. $slash .$entry;
+                        }
+                    }
+                    echo "<p> check and create OK $filename $temp_dir <pre>";print_r($dir_subdirs);echo "</pre></p>";
+                    echo "<p> check and create OK $filename $temp_dir <pre>";print_r($dir_files);echo "</pre></p>";
+                    return file($dir_files[1]);
+//exit;                    // search the directory
+                    
+                    // assuming that the information is in res0001.dat
+                    // after looking at 6 examples this was always the case
+                /*    $dom = new DomDocument();
+//exit;
+                    if (!$dom->load("$temp_dir/imsmanifest.xml")) {
+                      $this->error(get_string('errormanifest', 'qformat_blackboard_six'));
+                      exit;
+                    }
+                    $xpath = new DOMXPath($dom);
+                    // We starts from the root element
+                    $query = '//resources/resource[1]';
+                    $q_base = 'res00001';
+                    $q_file = "$temp_dir/res00001.dat";
+                    $examfiles = $xpath->query($query);
+                    $q_file = $examfiles->item(0)->getAttribute('file');
+                    $q_base = $examfiles->item(0)->getAttribute('baseurl');
+                    if ($q_base) {
+                        $this->filebase = $temp_dir."/".$q_base;
+                    }
+                    // assuming that the information is in res0001.dat
+                    // after looking at 6 examples this was always the case
+                    $q_file = "$temp_dir/res00001.dat";
+                    if (is_file($q_file)) {
+                        if (is_readable($q_file)) {
+                            $filearray = file($q_file);
+                            /// Check for Macintosh OS line returns (ie file on one line), and fix
+                            if (preg_match("~\r~", $filearray[0]) AND !preg_match("~\n~", $filearray[0])) {
+                                return explode("\r", $filearray[0]);
+                            } else {
+                                return $filearray;
+                            }
+                        }
+                    } else {
+                        print_error('cannotfindquestionfile', 'questioni');
+                    }*/
+                } else {
+                    print "filename: $filename<br />tempdir: $temp_dir <br />";
+                    print_error('cannotunzip', 'question');
+                }
+            } else {
+                print_error('cannotreaduploadfile');
+            }
+        } else {
+            print_error('cannotcreatetempdir');
+        }
+    }   
+    
+ /**
+* find all images tags in html text
+* and recode them into urls suitable
+* for Moodle filesystem
+* @param string text text to recode
+* @return string
+*/
+    public function recode_urls($text) 
+   {
+    // step one, find all file refs then add to array
+        preg_match_all('|<img[^>]+src="([^"]*)"|i', $text, $out); // find all src refs
+        foreach( $out[1] as $path ) {
+            if (strncmp($path, "http:", 5) != 0) {
+                $dirpath = dirname($path);
+                $text = preg_replace("|$dirpath|","@@PLUGINFILE@@",$text);
+            }
+        }
+        return $text;
+    }
+    public function process_text($text) {
+        $data = array();
+        $data['files'] = $this->process_img_tags($text);
+        $data['text'] = $this->recode_urls($text);
+        $data['format'] = FORMAT_HTML;
+        return $data;
+    }   
+    
+    
+    function readquestions ($lines) {
         $webctnumberregex =
                 '[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)((e|E|\\*10\\*\\*)([+-]?[0-9]+|\\([+-]?[0-9]+\\)))?';
 
@@ -196,7 +483,11 @@ class qformat_webct extends qformat_default {
 
             if (isset($questiontext) and is_string($questiontext)) {
                 if (preg_match("~^:~",$line)) {
-                    $question->questiontext = trim($questiontext);
+                    $questiontext = trim($questiontext);
+                    $question->questiontext = $this->recode_urls($questiontext);
+                    echo "<p> check ".$question->questiontext."and create OK $questiontext </p>";
+                    $question->questiontextformat = FORMAT_HTML;
+                    $question->questiontextfiles = $this->process_img_tags($questiontext);
                     unset($questiontext);
                 }
                  else {
@@ -208,8 +499,15 @@ class qformat_webct extends qformat_default {
             if (isset($answertext) and is_string($answertext)) {
                 if (preg_match("~^:~",$line)) {
                     $answertext = trim($answertext);
+                    if ($question->qtype == MULTICHOICE || $question->qtype == MATCH ) {
+                        $question->answer[$currentchoice]= $this->process_text($answertext);    
+                       // $question->answer[$currentchoice]['files'] = '';
+                        $question->subanswers[$currentchoice] = $question->answer[$currentchoice] ;
+                        
+                    }else {
                     $question->answer[$currentchoice] = $answertext;
                     $question->subanswers[$currentchoice] = $answertext;
+                    }
                     unset($answertext);
                 }
                  else {
@@ -231,7 +529,8 @@ class qformat_webct extends qformat_default {
 
             if (isset($feedbacktext) and is_string($feedbacktext)) {
                 if (preg_match("~^:~",$line)) {
-                   $question->feedback[$currentchoice] = trim($feedbacktext);
+                    
+                   $question->feedback[$currentchoice]= $this->process_text(trim($feedbacktext));    
                     unset($feedbacktext);
                 }
                  else {
@@ -243,10 +542,23 @@ class qformat_webct extends qformat_default {
             if (isset($generalfeedbacktext) and is_string($generalfeedbacktext)) {
                 if (preg_match("~^:~",$line)) {
                    $question->tempgeneralfeedback= trim($generalfeedbacktext);
+                  // $question->tempgeneralfeedback['format'] = FORMAT_PLAIN;
                     unset($generalfeedbacktext);
                 }
                  else {
                     $generalfeedbacktext .= str_replace('\:', ':', $line);
+                    continue;
+                }
+            }
+
+            if (isset($graderinfo) and is_string($graderinfo)) {
+                if (preg_match("~^:~",$line)) {
+            $question->graderinfo['text'] = trim($graderinfo);
+          //  $question->graderinfo['format'] = FORMAT_PLAIN;
+                    unset($graderinfo);
+                }
+                 else {
+                    $graderinfo .= str_replace('\:', ':', $line);
                     continue;
                 }
             }
@@ -286,7 +598,8 @@ class qformat_webct extends qformat_default {
                         // Create empty feedback array
                         foreach ($question->answer as $key => $dataanswer) {
                             if(!isset( $question->feedback[$key])){
-                                $question->feedback[$key] = '';
+                                $question->feedback[$key]['text'] = '';
+                                $question->feedback[$key]['format'] = FORMAT_PLAIN;
                             }
                         }
                         // this tempgeneralfeedback allows the code to work with versions from 1.6 to 1.9
@@ -297,7 +610,7 @@ class qformat_webct extends qformat_default {
                             } else {
                                 foreach ($question->answer as $key => $dataanswer) {
                                     if ($question->tempgeneralfeedback !=''){
-                                        $question->feedback[$key] = $question->tempgeneralfeedback.'<br/>'.$question->feedback[$key];
+                                        $question->feedback[$key]['text'] = $question->tempgeneralfeedback.'<br/>'.$question->feedback[$key]['text'];
                                     }
                                 }
                             }
@@ -323,6 +636,14 @@ class qformat_webct extends qformat_default {
                                 break;
 
                             case MULTICHOICE:
+                          //  foreach ($question->answer as $key => $dataanswer) {
+                              $question->correctfeedback['text'] = '' ;  
+                              $question->correctfeedback['format'] = 0 ;  
+                              $question->partiallycorrectfeedback['text'] = '' ;  
+                              $question->partiallycorrectfeedback['format'] = 0 ;  
+                              $question->incorrectfeedback['text'] = '' ; 
+                              $question->incorrectfeedback['format'] = 0 ; 
+  
                                 if ($question->single) {
                                     if ($maxfraction != 1) {
                                         $maxfraction = $maxfraction * 100;
@@ -355,6 +676,12 @@ class qformat_webct extends qformat_default {
                             case MATCH:
                                 // MDL-10680:
                                 // switch subquestions and subanswers
+                              $question->correctfeedback['text'] = '' ;  
+                              $question->correctfeedback['format'] = 0 ;  
+                              $question->partiallycorrectfeedback['text'] = '' ;  
+                              $question->partiallycorrectfeedback['format'] = 0 ;  
+                              $question->incorrectfeedback['text'] = '' ; 
+                              $question->incorrectfeedback['format'] = 0 ; 
                                 foreach ($question->subquestions as $id=>$subquestion) {
                                     $temp = $question->subquestions[$id];
                                     $question->subquestions[$id] = $question->subanswers[$id];
@@ -376,7 +703,7 @@ class qformat_webct extends qformat_default {
                     }
 
                     if ($QuestionOK) {
-                       // echo "<pre>"; print_r ($question);
+                        echo "<pre>"; print_r ($question);echo "</pre>";
                         $questions[] = $question;    // store it
                         unset($question);            // and prepare a new one
                         $question = $this->defaultquestion();
@@ -446,9 +773,21 @@ class qformat_webct extends qformat_default {
 
             if (preg_match("~^:TYPE:P~i",$line)) {
                 // Paragraph Question
-                $warnings[] = get_string("paragraphquestion", "qformat_webct", $nLineCounter);
-                unset($question);
-                $ignore_rest_of_question = TRUE;         // Question Type not handled by Moodle
+                // $warnings[] = get_string("paragraphquestion", "qformat_webct", $nLineCounter);
+                $question = $this->defaultquestion();
+                $question->qtype = ESSAY;
+                $question->responseformat = 'editor';
+                $question->responsefieldlines = 15;
+                $question->attachments = 0;
+                $question->graderinfo = array(
+                        'text' => '', 'format' => FORMAT_HTML, 'files' => array());
+                $question->feedback = array();
+                $question->generalfeedback = array();
+                $question->questiontextformat = FORMAT_PLAIN;
+                $ignore_rest_of_question = FALSE;
+                // To make us pass the end-of-question sanity checks
+                $question->answer = array('dummy');
+                $question->fraction = array('1.0');
                 continue;
             }
 
@@ -533,6 +872,11 @@ class qformat_webct extends qformat_default {
                 continue;
             }
 
+            if (preg_match('~^:ANSWER:~i', $line)) { // ESSAY
+                $graderinfo ="";      // Start gathering next lines
+                continue;
+            }
+                 
             if (preg_match('~^:FORMULA:(.*)~i', $line, $webct_options)) {
                 // Answer for a CALCULATED question
                 ++$currentchoice;
@@ -543,7 +887,9 @@ class qformat_webct extends qformat_default {
                 $question->fraction[$currentchoice] = 1.0;
                 $question->tolerance[$currentchoice] = 0.0;
                 $question->tolerancetype[$currentchoice] = 2; // nominal (units in webct)
-                $question->feedback[$currentchoice] = '';
+                //$question->feedback[$currentchoice] = '';
+                $question->feedback[$currentchoice]['text'] = '';
+                $question->feedback[$currentchoice]['format'] = FORMAT_PLAIN;
                 $question->correctanswerlength[$currentchoice] = 4;
 
                 $datasetnames = question_bank::get_qtype('calculated')->
@@ -665,6 +1011,7 @@ class qformat_webct extends qformat_default {
             }
             echo "</ul>";
         }
+        echo "<p><pre>";print_r($questions);"</p></pre>";       
         return $questions;
     }
 }
