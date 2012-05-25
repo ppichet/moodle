@@ -43,6 +43,7 @@ class qtype_numerical_edit_form extends question_edit_form {
         $this->add_per_answer_fields($mform, get_string('answerno', 'qtype_numerical', '{no}'),
                 question_bank::fraction_options());
 
+        $this->add_numberdecodingtype_options($mform);
         $this->add_unit_options($mform);
         $this->add_unit_fields($mform);
         $this->add_interactive_settings();
@@ -62,6 +63,23 @@ class qtype_numerical_edit_form extends question_edit_form {
 
         return $repeated;
     }
+    /**
+     * Add the number grading options to the form.
+     * @param object $mform the form being built.
+     */
+    protected function add_numberdecodingtype_options($mform) {
+
+        $mform->addElement('header', 'numberdecoding',
+                get_string('numberdecoding', 'qtype_numerical'));
+
+        $numberdecodingoptions = array(
+            qtype_numerical::NUMBERDECODINGFLEXIBLE  => get_string('numberdecodingflexible', 'qtype_numerical'),
+            qtype_numerical::NUMBERDECODINGSTRICT => get_string('numberdecodingstrict', 'qtype_numerical'),
+        );
+        $mform->addElement('select', 'numberdecodingtype',
+                get_string('numberdecoding', 'qtype_numerical'), $numberdecodingoptions);
+                $mform->setDefault('numberdecodingtype', 0);
+    }                
 
     /**
      * Add the unit handling options to the form.
@@ -171,6 +189,7 @@ class qtype_numerical_edit_form extends question_edit_form {
         $question = $this->data_preprocessing_hints($question);
         $question = $this->data_preprocessing_units($question);
         $question = $this->data_preprocessing_unit_options($question);
+        $question = $this->data_preprocessing_numberdecodingtype_options($question);
         return $question;
     }
 
@@ -217,6 +236,20 @@ class qtype_numerical_edit_form extends question_edit_form {
      * @param object $question the data being passed to the form.
      * @return object $question the modified data.
      */
+    protected function data_preprocessing_numberdecodingtype_options($question) {
+        if (empty($question->options->numberdecodingtype)) {
+            return $question;
+        }
+        $question->numberdecodingtype = $question->options->numberdecodingtype;
+        return $question;
+
+     }   
+    /**
+     * Perform the necessary preprocessing for the fields added by
+     * {@link add_unit_options()}.
+     * @param object $question the data being passed to the form.
+     * @return object $question the modified data.
+     */
     protected function data_preprocessing_unit_options($question) {
         if (empty($question->options)) {
             return $question;
@@ -224,6 +257,7 @@ class qtype_numerical_edit_form extends question_edit_form {
 
         $question->unitpenalty = $question->options->unitpenalty;
         $question->unitsleft = $question->options->unitsleft;
+        $question->numberdecodingtype = $question->options->numberdecodingtype;
 
         if ($question->options->unitgradingtype) {
             $question->unitgradingtypes = $question->options->unitgradingtype;
@@ -232,7 +266,7 @@ class qtype_numerical_edit_form extends question_edit_form {
         } else {
             $question->unitrole = $question->options->showunits;
         }
-
+        
         return $question;
     }
 

@@ -137,6 +137,7 @@ class qtype_calculated_edit_form extends qtype_numerical_edit_form {
 
         $repeated = array();
 
+        $this->add_numberdecodingtype_options($mform);
         $this->add_unit_options($mform, $this);
         $this->add_unit_fields($mform, $this);
         $this->add_interactive_settings();
@@ -154,6 +155,7 @@ class qtype_calculated_edit_form extends qtype_numerical_edit_form {
         $question = $this->data_preprocessing_hints($question);
         $question = $this->data_preprocessing_units($question);
         $question = $this->data_preprocessing_unit_options($question);
+        $question = $this->data_preprocessing_numberdecodingtype_options($question);
 
         if (isset($question->options->synchronize)) {
             $question->synchronize = $question->options->synchronize;

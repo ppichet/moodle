@@ -105,11 +105,11 @@ class qtype_numerical_question extends question_graded_automatically {
         if ($this->has_separate_unit_field() && empty($response['unit'])) {
             return false;
         }
-
+/*
         if ($this->ap->contains_thousands_seaparator($response['answer'])) {
             return false;
         }
-
+*/
         return true;
     }
 
@@ -130,12 +130,12 @@ class qtype_numerical_question extends question_graded_automatically {
         if ($this->has_separate_unit_field() && empty($response['unit'])) {
             return get_string('unitnotselected', 'qtype_numerical');
         }
-
+/*
         if ($this->ap->contains_thousands_seaparator($response['answer'])) {
             return get_string('pleaseenteranswerwithoutthousandssep', 'qtype_numerical',
                     $this->ap->get_separator());
         }
-
+*/
         return '';
     }
 

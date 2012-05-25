@@ -338,7 +338,7 @@ class qtype_calculated extends question_type {
         $question->unitpenalty = $questiondata->options->unitpenalty;
         $question->ap = question_bank::get_qtype(
                 'numerical')->make_answer_processor(
-                $questiondata->options->units, $questiondata->options->unitsleft);
+                $questiondata->options->units, $questiondata->options->unitsleft,$questiondata->options->numberdecodingtype);
 
         $question->datasetloader = new qtype_calculated_dataset_loader($questiondata->id);
     }

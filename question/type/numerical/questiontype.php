@@ -51,6 +51,9 @@ class qtype_numerical extends question_type {
 
     const UNITGRADEDOUTOFMARK = 1;
     const UNITGRADEDOUTOFMAX = 2;
+    
+    const NUMBERDECODINGFLEXIBLE = 0 ;
+    const NUMBERDECODINGSTRICT = 1 ;
 
     public function get_question_options($question) {
         global $CFG, $DB, $OUTPUT;
@@ -135,14 +138,19 @@ class qtype_numerical extends question_type {
                 $question->options->showunits = self::UNITNONE;
             }
             $question->options->unitsleft = 0;
+            $question->numberdecodingtype  = self::NUMBERDECODINGFLEXIBLE;
 
         } else {
             $question->options->unitgradingtype = $options->unitgradingtype;
             $question->options->unitpenalty = $options->unitpenalty;
             $question->options->showunits = $options->showunits;
             $question->options->unitsleft = $options->unitsleft;
-        }
-
+            if (isset($options->numberdecodingtype)) {
+                $question->options->numberdecodingtype = $options->numberdecodingtype ;
+            } else {
+                $question->options->numberdecodingtype = self::NUMBERDECODINGFLEXIBLE;
+            }
+       }
         return true;
     }
 
@@ -295,7 +303,12 @@ class qtype_numerical extends question_type {
         }
 
         $options->unitsleft = !empty($question->unitsleft);
-
+        
+        if (isset($question->numberdecodingtype)) {
+            $options->numberdecodingtype = $question->numberdecodingtype ;
+        } else {
+            $options->numberdecodingtype  = self::NUMBERDECODINGFLEXIBLE;
+        }
         $DB->update_record('question_numerical_options', $options);
 
         // Report any problems.
@@ -347,8 +360,9 @@ class qtype_numerical extends question_type {
         $question->unitdisplay = $questiondata->options->showunits;
         $question->unitgradingtype = $questiondata->options->unitgradingtype;
         $question->unitpenalty = $questiondata->options->unitpenalty;
+        $question->numberdecodingtype = $questiondata->options->numberdecodingtype;
         $question->ap = $this->make_answer_processor($questiondata->options->units,
-                $questiondata->options->unitsleft);
+                $questiondata->options->unitsleft,$questiondata->options->numberdecodingtype);
     }
 
     public function initialise_numerical_answers(question_definition $question, $questiondata) {
@@ -362,9 +376,9 @@ class qtype_numerical extends question_type {
         }
     }
 
-    public function make_answer_processor($units, $unitsleft) {
+    public function make_answer_processor($units, $unitsleft,$numberdecodingtype) {
         if (empty($units)) {
-            return new qtype_numerical_answer_processor(array());
+            return new qtype_numerical_answer_processor(array(),0,null,null,$numberdecodingtype);
         }
 
         $cleanedunits = array();
@@ -372,7 +386,7 @@ class qtype_numerical extends question_type {
             $cleanedunits[$unit->unit] = $unit->multiplier;
         }
 
-        return new qtype_numerical_answer_processor($cleanedunits, $unitsleft);
+        return new qtype_numerical_answer_processor($cleanedunits, $unitsleft,null,null,$numberdecodingtype);
     }
 
     public function delete_question($questionid, $contextid) {
@@ -460,7 +474,7 @@ class qtype_numerical extends question_type {
      *                             account as a float.
      */
     public function apply_unit($rawresponse, $units, $unitsleft) {
-        $ap = $this->make_answer_processor($units, $unitsleft);
+        $ap = $this->make_answer_processor($units, $unitsleft,self::NUMBERDECODINGFLEXIBLE);
         list($value, $unit, $multiplier) = $ap->apply_units($rawresponse);
         if (!is_null($multiplier)) {
             $value *= $multiplier;
@@ -501,11 +515,13 @@ class qtype_numerical_answer_processor {
     protected $thousandssep;
     /** @var boolean whether the units come before or after the number. */
     protected $unitsbefore;
+    
+    protected $numberdecodingtype;
 
     protected $regex = null;
 
     public function __construct($units, $unitsbefore = false, $decsep = null,
-            $thousandssep = null) {
+            $thousandssep = null, $numberdecodingtype = 0) {
         if (is_null($decsep)) {
             $decsep = get_string('decsep', 'langconfig');
         }
@@ -515,9 +531,11 @@ class qtype_numerical_answer_processor {
             $thousandssep = get_string('thousandssep', 'langconfig');
         }
         $this->thousandssep = $thousandssep;
+        $this->numberdecodingtype = $numberdecodingtype;
 
         $this->units = $units;
         $this->unitsbefore = $unitsbefore;
+        
     }
 
     /**
@@ -531,6 +549,9 @@ class qtype_numerical_answer_processor {
         $this->regex = null;
     }
 
+    public function set_numberdecodingtype($numberdecodingtype) {
+        $this->numberdecodingtype = $numberdecodingtype;
+    }
     /** @return string the decimal point character used. */
     public function get_point() {
         return $this->decsep;
@@ -629,20 +650,75 @@ class qtype_numerical_answer_processor {
      *      by the unit multiplier, if any, and the unit string, for reference.
      */
     public function apply_units($response, $separateunit = null) {
+        if ($this->numberdecodingtype == 1 ){
+                   list($beforepoint, $decimals, $exponent, $unit) = $this->parse_response($response);
+
+            if (is_null($beforepoint)) {
+                return array(null, null);
+            }
+    
+            $numberstring = $beforepoint . '.' . $decimals;
+            if ($exponent) {
+                $numberstring .= 'e' . $exponent;
+            }
+            if (!is_null($separateunit)) {
+            $unit = $separateunit;
+            }
+
+            if ($this->is_known_unit($unit)) {
+                $multiplier = 1 / $this->units[$unit];
+            } else {
+                $multiplier = null;
+            }
+
+
+        }else {
+
         // Strip spaces (which may be thousands separators) and change other forms
         // of writing e to e.
+        $thstriped = 0 ;
         $response = str_replace(' ', '', $response);
+        // strip thousand separators like half space
+        if (!in_array($this->thousandssep, array(',',' '))) { //accept . in deutch
+            if (strpos($value, $this->thousandssep) !== false){            
+                $response = str_replace($this->thousandssep, '', $response);
+                $thstriped++;
+            }
+        }    
+
         $response = preg_replace('~(?:e|E|(?:x|\*|×)10(?:\^|\*\*))([+-]?\d+)~', 'e$1', $response);
+        // . is mostly a decimal separator there a few exceptions where it is a thousand separator
 
         // If a . is present or there are multiple , (i.e. 2,456,789 ) assume ,
         // is a thouseands separator, and strip it, else assume it is a decimal
         // separator, and change it to ..
-        if (strpos($response, '.') !== false || substr_count($response, ',') > 1) {
+        // if only one and it is , then change to .
+        if(substr_count($response, ',')+ substr_count($response, '.') == 1 ) {
+            if (strpos($response, ',') !== false){
+                $response = str_replace(',', '.', $response);
+            }
+        } else if (substr_count($response, ',') == 1 && substr_count($response, '.') == 1) {
+            if (strpos($response, '.') > strpos($response, ',')){ // then , is thousand 
+              $response = str_replace(',', '', $response);
+            }else {
+              $response = str_replace('.', '', $response);      
+              $response = str_replace(',', '.', $response);
+            }
+        } else if (substr_count($response, ',') > 1) {
+              $response = str_replace(',', '', $response);
+        } else if (substr_count($response, '.') > 1) {
+              $response = str_replace('.', '', $response);      
+              $response = str_replace(',', '.', $response);
+        }                     
+/*
+        if (strpos($response, '.') !== false || substr_count($response, ',') > 1 ) {
             $response = str_replace(',', '', $response);
-        } else {
+        } else if (strpos($response, ',') !== false || substr_count($response, '.') > 1) {
+            $response = str_replace(',', '', $response);
+        }else {
             $response = str_replace(',', '.', $response);
         }
-
+*/
         $regex = '[+-]?(?:\d+(?:\\.\d*)?|\\.\d+)(?:e[-+]?\d+)?';
         if ($this->unitsbefore) {
             $regex = "/$regex$/";
@@ -669,6 +745,7 @@ class qtype_numerical_answer_processor {
             $multiplier = 1 / $this->units[$unit];
         } else {
             $multiplier = null;
+        }
         }
 
         return array($numberstring + 0, $unit, $multiplier); // + 0 to convert to number.

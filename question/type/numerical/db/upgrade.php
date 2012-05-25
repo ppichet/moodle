@@ -36,6 +36,21 @@ function xmldb_qtype_numerical_upgrade($oldversion) {
 
     $dbman = $DB->get_manager();
 
+    if ($oldversion < 2012042100) {
+
+        // Define field numberdecodingtype to be added to question_numerical_options
+        $table = new xmldb_table('question_numerical_options');
+        $field = new xmldb_field('numberdecodingtype', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '0', 'unitpenalty');
+
+        // Conditionally launch add field numberdecodingtype
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // numerical savepoint reached
+        upgrade_plugin_savepoint(true, 2012042100, 'qtype', 'numerical');
+    }
+
 
     return true;
 }
