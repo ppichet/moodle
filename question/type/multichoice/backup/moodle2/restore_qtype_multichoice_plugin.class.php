@@ -72,16 +72,6 @@ class restore_qtype_multichoice_plugin extends restore_qtype_plugin {
         if ($questioncreated) {
             // Adjust some columns
             $data->question = $newquestionid;
-            // Map sequence of question_answer ids
-            if ($data->answers) {
-                $answersarr = explode(',', $data->answers);
-            } else {
-                $answersarr = array();
-            }
-            foreach ($answersarr as $key => $answer) {
-                $answersarr[$key] = $this->get_mappingid('question_answer', $answer);
-            }
-            $data->answers = implode(',', $answersarr);
             // Insert record
             $newitemid = $DB->insert_record('question_multichoice', $data);
             // Create mapping (needed for decoding links)

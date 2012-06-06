@@ -39,6 +39,20 @@ function xmldb_qtype_multichoice_upgrade($oldversion) {
 
     // Moodle v2.2.0 release upgrade line
     // Put any upgrade step following this
+    if ($oldversion < 2012060100) {
+
+        // Define field id to be removed from question_multichoice
+        $table = new xmldb_table('question_multichoice');
+        $field = new xmldb_field('answers');
+
+        // Conditionally drop field 
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->drop_field($table, $field);
+        }
+
+        // multichoice savepoint reached
+        upgrade_plugin_savepoint(true, 2012060100, 'qtype', 'multichoice');
+    }
 
     return true;
 }

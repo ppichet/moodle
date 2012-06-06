@@ -120,7 +120,6 @@ class qtype_multichoice extends question_type {
             $options->id = $DB->insert_record('question_multichoice', $options);
         }
 
-        $options->answers = implode(',', $answers);
         $options->single = $question->single;
         if (isset($question->layout)) {
             $options->layout = $question->layout;
