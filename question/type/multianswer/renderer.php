@@ -215,6 +215,11 @@ class qtype_multianswer_textfield_renderer extends qtype_multianswer_subq_render
 
         if ($subq->qtype->name() == 'shortanswer') {
             $correctanswer = $subq->get_matching_answer($subq->get_correct_response());
+        } else if ($subq->qtype->name() == 'numerical') {
+            $correctresp = $subq->get_correct_response();
+            // The ->answer is the only parameter used.
+            $correctanswer = new stdClass();
+            $correctanswer->answer = $correctresp['answer'];
         } else {
             $correctanswer = $subq->get_correct_answer();
         }
