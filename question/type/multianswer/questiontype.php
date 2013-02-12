@@ -260,7 +260,7 @@ define('ANSWER_ALTERNATIVE_REGEX_FEEDBACK', 5);
 define('NUMBER_REGEX',
         '-?(([0-9]+[.,]?[0-9]*|[.,][0-9]+)([eE][-+]?[0-9]+)?)');
 define('NUMERICAL_ALTERNATIVE_REGEX',
-        '^(' . NUMBER_REGEX . ')(:' . NUMBER_REGEX . ')?$');
+        '^([ ]*'. NUMBER_REGEX . '[ ]*)(:[ ]*' . NUMBER_REGEX . '[ ]*)?$');
 
 // Parenthesis positions for NUMERICAL_FORMATED_ALTERNATIVE_ANSWER_REGEX
 define('NUMERICAL_CORRECT_ANSWER', 1);
@@ -411,15 +411,32 @@ function qtype_multianswer_extract_question($text) {
                 $wrapped->feedback["$answerindex"]['itemid'] = '';
 
             }
-            if (!empty($answerregs[ANSWER_REGEX_ANSWER_TYPE_NUMERICAL])
-                    && preg_match('~'.NUMERICAL_ALTERNATIVE_REGEX.'~s',
-                            $altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER], $numregs)) {
-                $wrapped->answer[] = $numregs[NUMERICAL_CORRECT_ANSWER];
-                if (array_key_exists(NUMERICAL_ABS_ERROR_MARGIN, $numregs)) {
-                    $wrapped->tolerance["$answerindex"] =
-                    $numregs[NUMERICAL_ABS_ERROR_MARGIN];
-                } else {
-                    $wrapped->tolerance["$answerindex"] = 0;
+            if (!empty($answerregs[ANSWER_REGEX_ANSWER_TYPE_NUMERICAL])){
+                $strippedanswer= str_replace(' ', '', $altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER]);
+                if  ( preg_match('~'.NUMERICAL_ALTERNATIVE_REGEX.'~s',
+                           $strippedanswer , $numregs)) { //$altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER]
+                    $wrapped->answer[] = $numregs[NUMERICAL_CORRECT_ANSWER];
+                    if (array_key_exists(NUMERICAL_ABS_ERROR_MARGIN, $numregs)){
+                        $wrapped->tolerance["$answerindex"] =
+                            $numregs[NUMERICAL_ABS_ERROR_MARGIN];
+                    } else {
+                        $wrapped->tolerance["$answerindex"] = 0;
+                    }
+                } else { 
+                    $answer = html_entity_decode(
+                            $altregs[ANSWER_ALTERNATIVE_REGEX_ANSWER], ENT_QUOTES, 'UTF-8');
+                    $answer = str_replace('\}', '}', $answer);
+                    $answer = str_replace('\#', '#', $answer);
+                    //Try to see if there is a : i.e. number:tolerance .
+                    if (strrpos($answer,':') != null ){
+                        $part = explode(':',$answer);
+                        echo "<p>=explode $answer  |".$part[0]."| tolerance |".$part[1]."|</p>"; 
+                        $wrapped->answer["$answerindex"]= $part[0];
+                        $wrapped->tolerance["$answerindex"] = $part[1];
+                    } else {
+                        $wrapped->answer["$answerindex"]= $answer ;
+                        $wrapped->tolerance["$answerindex"] = 0;                         
+                    }                
                 }
             } else { // Tolerance can stay undefined for non numerical questions
                 // Undo quoting done by the HTML editor.

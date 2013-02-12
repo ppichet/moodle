@@ -439,6 +439,7 @@ class qtype_multianswer_edit_form extends question_edit_form {
         }
 
         list($value, $unit) = $this->ap->apply_units($x);
+                        echo "<p>= $value   unit |".$unit."|</p>"; 
 
         return !is_null($value) && !$unit;
     }
