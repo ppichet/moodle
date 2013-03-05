@@ -365,8 +365,12 @@ class qtype_multianswer_edit_form extends question_edit_form {
                         }
                         foreach ($subquestion->answer as $key => $answer) {
                             if ($subquestion->qtype == 'numerical' && $key == 0) {
-                                $default_values[$prefix.'tolerance['.$key.']'] =
+                                if(isset($subquestion->tolerance[0])){
+                                    $default_values[$prefix.'tolerance['.$key.']'] =
                                         $subquestion->tolerance[0];
+                                }else{
+                                    $default_values[$prefix.'tolerance['.$key.']'] = 0;
+                                }
                             }
                             if (is_array($answer)) {
                                 $answer = $answer['text'];
@@ -437,10 +441,9 @@ class qtype_multianswer_edit_form extends question_edit_form {
         if (is_null($this->ap)) {
             $this->ap = new qtype_numerical_answer_processor(array());
         }
-
-        list($value, $unit) = $this->ap->apply_units($x);
-
-        return !is_null($value) && !$unit;
+        list($value, $unit,$mult) = $this->ap->apply_units($x);
+echo "<p>=value $value unit $unit</p>";
+        return !is_null($value) && !$unit;//
     }
 
 
@@ -471,11 +474,12 @@ class qtype_multianswer_edit_form extends question_edit_form {
                         $trimmedanswer = trim($answer);
                         if ($trimmedanswer !== '') {
                             $answercount++;
-                            if ($subquestion->qtype == 'numerical' &&
-                                    !($this->is_valid_number($trimmedanswer) || $trimmedanswer == '*')) {
+                            if ($subquestion->qtype == 'numerical' && $trimmedanswer != '*'){
+                                if(    !$this->is_valid_number($trimmedanswer) ) {
                                 $errors[$prefix.'answer['.$key.']'] =
                                         get_string('answermustbenumberorstar', 'qtype_numerical');
                             }
+                             }
                             if ($subquestion->fraction[$key] == 1) {
                                 $maxgrade = true;
                             }
