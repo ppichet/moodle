@@ -93,6 +93,7 @@ class qtype_calculated_edit_form extends qtype_numerical_edit_form {
                 get_string('correctanswershowsformat', 'qtype_calculated'), $answerlengthformats);
 
         array_splice($repeated, 4, 0, $addrepeated);
+        $repeated[1]->setSize(80);
 
         return $repeated;
     }

@@ -438,9 +438,10 @@ class qtype_calculated extends question_type {
                 break;
             case 'datasetitems':
                 require("$CFG->dirroot/question/type/calculated/datasetitems_form.php");
-                $regenerate = optional_param('forceregeneration', false, PARAM_BOOL);
+                $regenerate = optional_param('forceregeneration', 0, PARAM_INT);
+                $selectshow = optional_param('selectshow', 0 , PARAM_INT);
                 $mform = new question_dataset_dependent_items_form(
-                        "$submiturl?wizardnow=datasetitems", $question, $regenerate);
+                        "$submiturl?wizardnow=datasetitems", $question, $regenerate,$selectshow);
                 break;
             default:
                 print_error('invalidwizardpage', 'question');
@@ -815,7 +816,6 @@ class qtype_calculated extends question_type {
 
     public function save_question_calculated($question, $fromform) {
         global $DB;
-
         foreach ($question->options->answers as $key => $answer) {
             if ($options = $DB->get_record('question_calculated', array('answer' => $key))) {
                 $options->tolerance = trim($fromform->tolerance[$key]);
@@ -1032,9 +1032,15 @@ class qtype_calculated extends question_type {
 
         foreach ($answers as $key => $answer) {
             if (is_string($answer)) {
-                $strheader .= $delimiter.$answer;
+                $strheader .= $delimiter.substr($answer,0,20);
+                if(strlen($answer)) {
+                    $strheader .= '...';
+                }
             } else {
-                $strheader .= $delimiter.$answer->answer;
+                $strheader .= $delimiter.substr($answer->answer,0,20);
+                if(strlen($answer->answer)) {
+                    $strheader .= '...';
+                }
             }
             $delimiter = '<br/><br/><br/>';
         }
@@ -1066,16 +1072,17 @@ class qtype_calculated extends question_type {
                 $answer->answer, $data, $answer->tolerance,
                 $answer->tolerancetype, $answer->correctanswerlength,
                 $answer->correctanswerformat, $unit);
+            //    echo "formated".$formattedanswer->answer."formatedend<br/>" ;
             if ($formula === '*') {
                 $answer->min = ' ';
                 $formattedanswer->answer = $answer->answer;
-            } else {
+            } else if (  !is_nan($formattedanswer->answer) ){
                 eval('$ansvalue = '.$formula.';');
                 $ans = new qtype_numerical_answer(0, $ansvalue, 0, '', 0, $answer->tolerance);
                 $ans->tolerancetype = $answer->tolerancetype;
                 list($answer->min, $answer->max) = $ans->get_tolerance_interval($answer);
             }
-            if ($answer->min === '') {
+            if (!isset($answer->min)) {
                 // This should mean that something is wrong
                 $comment->stranswers[$key] = " $formattedanswer->answer".'<br/><br/>';
             } else if ($formula === '*') {
@@ -1085,7 +1092,7 @@ class qtype_calculated extends question_type {
                 $comment->stranswers[$key] = $formula . ' = ' . $formattedanswer->answer . '<br/>';
                 $correcttrue = new stdClass();
                 $correcttrue->correct = $formattedanswer->answer;
-                $correcttrue->true = $answer->answer;
+                $correcttrue->true = '';//$answer->answer;
                 if ($formattedanswer->answer < $answer->min ||
                         $formattedanswer->answer > $answer->max) {
                     $comment->outsidelimit = true;

@@ -53,7 +53,7 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
 
     public $maxnumber = -1;
 
-    public $regenerate = true;
+    public $regenerate = 0 ;
 
     public $noofitems;
 
@@ -70,8 +70,10 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
     public $formdata = array();
 
     public function __construct($submiturl, $question, $category, $contexts, $formeditable = true) {
-        $this->regenerate = true;
         $this->question = $question;
+        $this->regenerate = optional_param('forceregeneration', 0 , PARAM_INT);
+            echo "this forceregeneration <br/><pre>";print_r($this->question); echo "<pre> <br/>";    
+
 
         $this->qtypeobj = question_bank::get_qtype($this->question->qtype);
         // get the dataset definitions for this question
@@ -81,6 +83,7 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
         // get priority to paramdatasets
 
         $this->reload = optional_param('reload', false, PARAM_BOOL);
+        echo " reload".$this->reload."<br/>" ;
         if (!$this->reload) { // use database data as this is first pass
             // question->id == 0 so no stored datasets
             if (!empty($question->id)) {
@@ -133,6 +136,7 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
             //  to implement : don't do any changes if the question is used in a quiz.
             // If new datadef, new properties should erase items.
             // Most of the data
+            echo " else reload".$this->reload."<br/>" ;
             $datasettoremove = false;
             $newdatasetvalues = false;
             $newdataset = false;
@@ -151,7 +155,7 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
                     $tolerancetype = optional_param_array('tolerancetype', '', PARAM_FLOAT);
                     $correctanswerlength = optional_param_array('correctanswerlength', '', PARAM_INT);
                     $correctanswerformat = optional_param_array('correctanswerformat', '', PARAM_INT);
-
+                    echo "dummyform-answer <br/><pre>";print_r($dummyform->answer); echo "<pre> <br/>";
                     foreach ($dummyform->answer as $key => $answer) {
                         if (trim($answer) != '') {  // just look for non-empty
                             $this->answer[$key] = new stdClass();
@@ -235,11 +239,21 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
         }
         $maxnumber = -1;
         if (optional_param('addbutton', false, PARAM_BOOL)) {
-            $maxnumber = optional_param('selectadd', '', PARAM_INT); //FIXME: sloppy coding
+            $maxnumber = optional_param('selectadd',0, PARAM_INT); //FIXME: sloppy coding
             foreach ($this->datasetdefs as $defid => $datasetdef) {
                 $datasetdef->itemcount = $maxnumber;
                 unset($datasetdef->items);
                 for ($numberadded = 1; $numberadded <= $maxnumber; $numberadded++) {
+                if (!optional_param('updatedatasets', false, PARAM_BOOL) &&
+                        !optional_param('updateanswers', false, PARAM_BOOL) &&
+                         !optional_param('getnextbutton', false, PARAM_BOOL)
+                        ) {
+                    $formdata["number[$j]"] = $this->qtypeobj->generate_dataset_item(
+                            $datasetdef->options);
+                } else {
+                    $formdata["number[$j]"] = $this->_form->getElementValue("number[$j]");
+                }
+ 
                     $datasetitem = new stdClass();
                     $datasetitem->itemnumber = $numberadded;
                     $datasetitem->id = 0;
@@ -288,6 +302,9 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
      * @param MoodleQuickForm $mform the form being built.
      */
     protected function definition_inner($mform) {
+               // $mform = $this->form;
+     //   $mform->setDisableShortforms();
+
         $strquestionlabel = $this->qtypeobj->comment_header($this->nonemptyanswer);
         $label = get_string("sharedwildcards", "qtype_calculated");
         $mform->addElement('hidden', 'synchronize', 0);
@@ -295,6 +312,10 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
         $mform->setType('initialcategory', PARAM_INT);
         $mform->addElement('hidden', 'reload', 1);
         $mform->setType('reload', PARAM_INT);
+                echo " testing params".optional_param('testing params', 0 , PARAM_FLOAT);
+
+        $mform->addElement('hidden', 'testing params', 23);
+
         $addfieldsname = 'updatequestion value';
         $addstring = get_string("updatecategory", "qtype_calculated");
         $mform->registerNoSubmitButton($addfieldsname);
@@ -425,6 +446,8 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
                 }
                 $this->formdata['selectdelete'] = '1';
                 $this->formdata['selectadd'] = '1';
+                
+
                 $j = $this->noofitems * count($this->datasetdefs)+1;
                 $data = array(); // data for comment_on_datasetitems later
                 $idx = 1;
@@ -449,15 +472,24 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
                 $showoptions["$i"] = "$i";
             }
             $mform->closeHeaderBefore('additemhdr');
+            $radiogrp = array();
+            $radiogrp[] =& $mform->createElement('radio', 'forceregeneration',
+                    null, get_string('reuseifpossible', 'qtype_calculated'), 0);
+            $radiogrp[] =& $mform->createElement('radio', 'forceregeneration',
+                    null, get_string('forceregenerationall', 'qtype_calculated'), 2);
             $addgrp = array();
             $addgrp[] = $mform->createElement('submit', 'addbutton',
                     get_string('generatenewitemsset', 'qtype_calculatedsimple'));
             $addgrp[] = $mform->createElement('select', "selectadd", '', $addoptions);
             $addgrp[] = $mform->createElement('static', "stat", '',
                     get_string('newsetwildcardvalues', 'qtype_calculatedsimple'));
+            $mform->addGroup($radiogrp, 'forceregenerationgrp',
+                    get_string('nextitemtoadd', 'qtype_calculated'), "<br/>", false);
+            $mform->setDefault('forceregeneration',0 );//$this->regenerate
+                    //$this->formdata['forceregeneration'] = 2;
             $mform->addGroup($addgrp, 'addgrp', '', '   ', false);
             $mform->registerNoSubmitButton('addbutton');
-            $mform->closeHeaderBefore('addgrp');
+            $mform->closeHeaderBefore('forceregenerationgrp');
             $addgrp1 = array();
             $addgrp1[] = $mform->createElement('submit', 'showbutton',
                     get_string('showitems', 'qtype_calculatedsimple'));

@@ -55,7 +55,9 @@ class question_dataset_dependent_items_form extends question_wizard_form {
 
     public $maxnumber = -1;
 
-    public $regenerate;
+    public $regenerate = 0 ; 
+
+    public $selectshow = 1 ; 
 
     public $noofitems;
 
@@ -68,9 +70,17 @@ class question_dataset_dependent_items_form extends question_wizard_form {
      *
      * @param MoodleQuickForm $mform the form being built.
      */
-    public function __construct($submiturl, $question, $regenerate) {
+    public function __construct($submiturl, $question, $regenerate,$selectshow) {
         global $SESSION, $CFG, $DB;
-        $this->regenerate = $regenerate;
+        $this->regenerate = $regenerate ;
+//        $this->regenerate = optional_param('forceregeneration', 0 , PARAM_INT);
+    //    if (optional_param('selectshow', 0 , PARAM_INT) != 0 ){
+     //       $this->selectshow = optional_param('nextpageparam[selectshow]', 0 , PARAM_INT);
+     //   }
+     if ($selectshow > 0 ){ 
+        $this->selectshow = $selectshow ;
+      }  
+    //    echo "selectshow".$this->selectshow ; 
         $this->question = $question;
         $this->qtypeobj = question_bank::get_qtype($this->question->qtype);
         // Validate the question category.
@@ -109,15 +119,16 @@ class question_dataset_dependent_items_form extends question_wizard_form {
 
     protected function definition() {
                 $labelsharedwildcard = get_string("sharedwildcard", "qtype_calculated");
-
+      
         $mform =& $this->_form;
+        $mform->setDisableShortforms(); 
         $strquestionlabel = $this->qtypeobj->comment_header($this->question);
         if ($this->maxnumber != -1 ) {
             $this->noofitems = $this->maxnumber;
         } else {
             $this->noofitems = 0;
         }
-        $label = get_string("sharedwildcards", "qtype_calculated");
+        $label = get_string("sharedwildcards", "qtype_calculated").'regen'.$this->regenerate.'sel'.$this->selectshow;
 
         $html2 = $this->qtypeobj->print_dataset_definitions_category_shared(
                 $this->question, $this->datasetdefs);
@@ -234,9 +245,11 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         }
 
         $mform->addElement('submit', 'getnextbutton', get_string('getnextnow', 'qtype_calculated'));
+        $mform->registerNoSubmitButton('getnextbutton');
         $mform->addElement('static', "dividera", '', '<hr />');
         $addgrp = array();
         $addgrp[] =& $mform->createElement('submit', 'addbutton', get_string('add', 'moodle'));
+        $mform->registerNoSubmitButton('addbutton');
         $addgrp[] =& $mform->createElement('select', "selectadd",
                 get_string('additem', 'qtype_calculated'), $addremoveoptions);
         $addgrp[] = & $mform->createElement('static', "stat", "Items",
@@ -248,6 +261,7 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             $deletegrp = array();
             $deletegrp[] = $mform->createElement('submit', 'deletebutton',
                     get_string('delete', 'moodle'));
+            $mform->registerNoSubmitButton('deletebutton');
             $deletegrp[] = $mform->createElement('select', 'selectdelete',
                     get_string('deleteitem', 'qtype_calculated')."1", $addremoveoptions);
             $deletegrp[] = $mform->createElement('static', "stat", "Items",
@@ -261,7 +275,8 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         $addgrp1 = array();
         $addgrp1[] = $mform->createElement('submit', 'showbutton',
                 get_string('showitems', 'qtype_calculated'));
-        $addgrp1[] = $mform->createElement('select', "selectshow", '' , $showoptions);
+       //  $addgrp1[] = $mform->createElement('select', "selectshow", '' , $showoptions);
+        $addgrp1[] = $mform->createElement('select', "nextpageparam[selectshow]", '' , $showoptions);
         $addgrp1[] = $mform->createElement('static', "stat", '',
                 get_string('setwildcardvalues', 'qtype_calculated'));
         $mform->addGroup($addgrp1, 'addgrp1', '', '   ', false);
@@ -269,11 +284,13 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         $mform->closeHeaderBefore('addgrp1');
         //----------------------------------------------------------------------
         $j = $this->noofitems * count($this->datasetdefs);
-        $k = optional_param('selectshow', 1, PARAM_INT);
+        //$k = optional_param('selectshow', 1, PARAM_INT);
+        $k = $this->selectshow ;//  optional_param('nextpageparam[selectshow]', 1, PARAM_INT);
+      //  echo "noofitems j ".$j."k ".$k."<br/>";
         for ($i = $this->noofitems; $i >= 1; $i--) {
             if ($k > 0) {
                 $mform->addElement('header', '', "<b>" .
-                        get_string('setno', 'qtype_calculated', $i)."</b>&nbsp;&nbsp;");
+                        get_string('setno', 'qtype_calculated', $i)."</b>&nbsp;&nbsp;".$k);
             }
             foreach ($this->datasetdefs as $defkey => $datasetdef) {
                 if ($k > 0) {
@@ -323,6 +340,7 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             $k--;
 
         }
+
         $mform->addElement('static', 'outsidelimit', '', '');
         //----------------------------------------------------------------------
         // Non standard name for button element needed so not using add_action_buttons
@@ -410,7 +428,8 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             $formdata['answercomment['.$itemnumber.']'] = $totalcomment;
         }
 
-        $formdata['nextpageparam[forceregeneration]'] = $this->regenerate;
+        $formdata['nextpageparam[forceregeneration]'] = $this->regenerate;//nextpageparam[]
+        $formdata['nextpageparam[selectshow]'] = $this->selectshow;//nextpageparam[]
         $formdata['selectdelete'] = '1';
         $formdata['selectadd'] = '1';
         $j = $this->noofitems * count($this->datasetdefs)+1;
@@ -420,7 +439,9 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             $itemnumber = $this->noofitems+1;
             foreach ($this->datasetdefs as $defid => $datasetdef) {
                 if (!optional_param('updatedatasets', false, PARAM_BOOL) &&
-                        !optional_param('updateanswers', false, PARAM_BOOL)) {
+                        !optional_param('updateanswers', false, PARAM_BOOL) 
+                      //  &&!optional_param('getnextbutton', false, PARAM_BOOL)
+                        ) {
                     $formdata["number[$j]"] = $this->qtypeobj->generate_dataset_item(
                             $datasetdef->options);
                 } else {
@@ -437,7 +458,9 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         //existing records override generated data depending on radio element
         $j = $this->noofitems * count($this->datasetdefs) + 1;
         if (!$this->regenerate && !optional_param('updatedatasets', false, PARAM_BOOL) &&
-                !optional_param('updateanswers', false, PARAM_BOOL)) {
+                !optional_param('updateanswers', false, PARAM_BOOL) ){
+              //  &&
+              // !optional_param('getnextbutton', false, PARAM_BOOL)) 
             $idx = 1;
             $itemnumber = $this->noofitems + 1;
             foreach ($this->datasetdefs as $defid => $datasetdef) {
@@ -472,6 +495,7 @@ class question_dataset_dependent_items_form extends question_wizard_form {
     }
 
     public function validation($data, $files) {
+        
         $errors = array();
         if (isset($data['savechanges']) && ($this->noofitems==0) ) {
             $errors['warning'] = get_string('warning', 'mnet');
@@ -485,17 +509,17 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             if (! is_numeric($number)) {
                 if (stristr($number, ', ')) {
                     $errors['number['.$key.']'] = get_string(
-                        'The , cannot be used, use . as in 0.013 or 1.3e-2', 'qtype_calculated');
+                        'nocommaallowed', 'qtype_calculated');
                 } else {
                     $errors['number['.$key.']'] = get_string(
-                            'This is not a valid number', 'qtype_calculated');
+                            'notvalidnumber', 'qtype_calculated');
                 }
             } else if (stristr($number, 'x')) {
                 $errors['number['.$key.']'] = get_string(
-                        'Hexadecimal format (i.e. 0X12d) is not allowed', 'qtype_calculated');
+                        'hexanotallowed', 'qtype_calculated');
             } else if (is_nan($number)) {
                 $errors['number['.$key.']'] = get_string(
-                        'is a NAN number', 'qtype_calculated');
+                        'notvalidnumber', 'qtype_calculated');
             }
         }
         return $errors;
