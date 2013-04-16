@@ -299,6 +299,7 @@ function qtype_multianswer_extract_question($text) {
     $question = new stdClass();
     $question->qtype = 'multianswer';
     $question->questiontext = $text;
+    $question->questiontext['text'] = str_replace(array('<pre>', '</pre>'), array('', ''), $question->questiontext['text']);
     $question->generalfeedback['text'] = '';
     $question->generalfeedback['format'] = FORMAT_HTML;
     $question->generalfeedback['itemid'] = '';
