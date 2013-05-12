@@ -167,16 +167,16 @@ class question_dataset_dependent_items_form extends question_wizard_form {
                 $mform->addElement('static',
                         'answercomment[' . ($this->noofitems+$key1) . ']', $answer->answer);
                 $mform->addElement('hidden', 'tolerance['.$key.']', '');
-                $mform->setType('tolerance['.$key.']', PARAM_RAW);
+                $mform->setType('tolerance['.$key.']', PARAM_NUMBER);
                 $mform->setAdvanced('tolerance['.$key.']', true);
                 $mform->addElement('hidden', 'tolerancetype['.$key.']', '');
-                $mform->setType('tolerancetype['.$key.']', PARAM_RAW);
+                $mform->setType('tolerancetype['.$key.']', PARAM_INTEGER);
                 $mform->setAdvanced('tolerancetype['.$key.']', true);
                 $mform->addElement('hidden', 'correctanswerlength['.$key.']', '');
-                $mform->setType('correctanswerlength['.$key.']', PARAM_RAW);
+                $mform->setType('correctanswerlength['.$key.']', PARAM_INTEGER);
                 $mform->setAdvanced('correctanswerlength['.$key.']', true);
                 $mform->addElement('hidden', 'correctanswerformat['.$key.']', '');
-                $mform->setType('correctanswerformat['.$key.']', PARAM_RAW);
+                $mform->setType('correctanswerformat['.$key.']', PARAM_INTEGER);
                 $mform->setAdvanced('correctanswerformat['.$key.']', true);
             } else {
                 $mform->addElement('static', 'answercomment[' . ($this->noofitems+$key1) . ']',
@@ -184,6 +184,7 @@ class question_dataset_dependent_items_form extends question_wizard_form {
                 $mform->addElement('text', 'tolerance['.$key.']',
                         get_string('tolerance', 'qtype_calculated'));
                 $mform->setAdvanced('tolerance['.$key.']', true);
+                $mform->setType('tolerance['.$key.']', PARAM_NUMBER);
                 $mform->addElement('select', 'tolerancetype['.$key.']',
                         get_string('tolerancetype', 'qtype_numerical'),
                         $this->qtypeobj->tolerance_types());
