@@ -50,6 +50,8 @@ class question_dataset_dependent_items_form extends question_wizard_form {
      * @var question_dataset_dependent_questiontype
      */
     public $qtypeobj;
+    
+    public $reload = false;
 
     public $datasetdefs;
 
@@ -62,6 +64,8 @@ class question_dataset_dependent_items_form extends question_wizard_form {
     public $outsidelimit = false;
 
     public $commentanswers = array();
+     public $fromformnumber = array();     
+
 
     /**
      * Add question-type specific form fields.
@@ -71,6 +75,11 @@ class question_dataset_dependent_items_form extends question_wizard_form {
     public function __construct($submiturl, $question, $regenerate) {
         global $SESSION, $CFG, $DB;
         $this->regenerate = $regenerate;
+        $this->reload = optional_param('reload', false, PARAM_BOOL);
+        $this->fromformnumber = optional_param_array('number', '', PARAM_RAW);
+        //ksort($this->fromformnumber);
+        //if (!$this->reload) { // Use database data as this is first pass
+
         $this->question = $question;
         $this->qtypeobj = question_bank::get_qtype($this->question->qtype);
         // Validate the question category.
@@ -109,9 +118,14 @@ class question_dataset_dependent_items_form extends question_wizard_form {
 
     protected function definition() {
         $labelsharedwildcard = get_string("sharedwildcard", "qtype_calculated");
+        echo"<p>fromformnumber <pre>"; print_r($this->fromformnumber);echo"</pre></p>";
         $mform =& $this->_form;
         $mform->setDisableShortforms();
-
+        $mform->addElement('hidden', 'reload', 1);
+        $mform->setType('reload', PARAM_INT);
+        if ($this->reload){
+        $mform->addElement('static', 'indreload', "RELOAD", "TRUE");
+        }
         $strquestionlabel = $this->qtypeobj->comment_header($this->question);
         if ($this->maxnumber != -1 ) {
             $this->noofitems = $this->maxnumber;
@@ -139,7 +153,7 @@ class question_dataset_dependent_items_form extends question_wizard_form {
                 $name = get_string('wildcard', 'qtype_calculated', $datasetdef->name);
             }
             $mform->addElement('text', "number[$j]", $name);
-            $mform->setType("number[$j]", PARAM_FLOAT);
+            $mform->setType("number[$j]", PARAM_RAW);
             $this->qtypeobj->custom_generator_tools_part($mform, $idx, $j);
             $idx++;
             $mform->addElement('hidden', "definition[$j]");
@@ -223,17 +237,15 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         $mform->addElement('header', 'addhdr', get_string('add', 'moodle'));
         $mform->closeHeaderBefore('addhdr');
 
-        if ($this->qtypeobj->supports_dataset_item_generation()) {
-            $radiogrp = array();
-            $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
-                    null, get_string('reuseifpossible', 'qtype_calculated'), 0);
-            $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
-                    null, get_string('forceregenerationshared', 'qtype_calculated'), 1);
-            $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
-                    null, get_string('forceregenerationall', 'qtype_calculated'), 2);
-            $mform->addGroup($radiogrp, 'forceregenerationgrp',
-                    get_string('nextitemtoadd', 'qtype_calculated'), "<br/>", false);
-        }
+        $radiogrp = array();
+        $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
+                null, get_string('reuseifpossible', 'qtype_calculated'), 0);
+        $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
+                null, get_string('forceregenerationshared', 'qtype_calculated'), 1);
+        $radiogrp[] =& $mform->createElement('radio', 'nextpageparam[forceregeneration]',
+                null, get_string('forceregenerationall', 'qtype_calculated'), 2);
+        $mform->addGroup($radiogrp, 'forceregenerationgrp',
+                get_string('nextitemtoadd', 'qtype_calculated'), "<br/>", false);
 
         $mform->addElement('submit', 'getnextbutton', get_string('getnextnow', 'qtype_calculated'));
         $mform->addElement('static', "dividera", '', '<hr />');
@@ -393,10 +405,16 @@ class question_dataset_dependent_items_form extends question_wizard_form {
             $data = array();
             foreach ($this->datasetdefs as $defid => $datasetdef) {
                 if (isset($datasetdef->items[$itemnumber])) {
-                    $formdata["number[$j]"] = $datasetdef->items[$itemnumber]->value;
+                    if ($this->reload){
+                        $formdata["number[$j]"] = $this->fromformnumber[$itemnumber];// Contains the value.
+                        $data[$datasetdef->name] = $this->fromformnumber[$itemnumber];
+                    } else {
+                        $formdata["number[$j]"] = $datasetdef->items[$itemnumber]->value;
+                        $data[$datasetdef->name] = $datasetdef->items[$itemnumber]->value;
+                    }
+                    
                     $formdata["definition[$j]"] = $defid;
                     $formdata["itemid[$j]"] = $datasetdef->items[$itemnumber]->id;
-                    $data[$datasetdef->name] = $datasetdef->items[$itemnumber]->value;
                 }
                 $j--;
             }
@@ -418,22 +436,26 @@ class question_dataset_dependent_items_form extends question_wizard_form {
         $j = $this->noofitems * count($this->datasetdefs)+1;
         $data = array(); // Data for comment_on_datasetitems later.
         // Dataset generation defaults.
-        if ($this->qtypeobj->supports_dataset_item_generation()) {
-            $itemnumber = $this->noofitems+1;
-            foreach ($this->datasetdefs as $defid => $datasetdef) {
-                if (!optional_param('updatedatasets', false, PARAM_BOOL) &&
-                        !optional_param('updateanswers', false, PARAM_BOOL)) {
-                    $formdata["number[$j]"] = $this->qtypeobj->generate_dataset_item(
-                            $datasetdef->options);
+        $itemnumber = $this->noofitems+1;
+        foreach ($this->datasetdefs as $defid => $datasetdef) {
+            if (!optional_param('updatedatasets', false, PARAM_BOOL) &&
+                    !optional_param('updateanswers', false, PARAM_BOOL)) {
+                if (isset($this->fromformnumber[$j])) {
+                    $formdata["number[$j]"] = $this->fromformnumber[$j]; 
+                    echo "<p>isset $j qo </p>";        
                 } else {
-                    $formdata["number[$j]"] = $this->_form->getElementValue("number[$j]");
-                }
-                $formdata["definition[$j]"] = $defid;
-                $formdata["itemid[$j]"] = isset($datasetdef->items[$itemnumber]) ?
-                        $datasetdef->items[$itemnumber]->id : 0;
-                $data[$datasetdef->name] = $formdata["number[$j]"];
-                $j++;
+                    echo "<p>no  $j qo </p>";
+                    $formdata["number[$j]"] = $this->qtypeobj->generate_dataset_item(
+                        $datasetdef->options);
+                }         
+            } else {
+                $formdata["number[$j]"] = $this->_form->getElementValue("number[$j]");
             }
+            $formdata["definition[$j]"] = $defid;
+            $formdata["itemid[$j]"] = isset($datasetdef->items[$itemnumber]) ?
+                    $datasetdef->items[$itemnumber]->id : 0;
+            $data[$datasetdef->name] = $formdata["number[$j]"];
+            $j++;
         }
 
         // Existing records override generated data depending on radio element.

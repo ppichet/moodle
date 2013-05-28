@@ -656,6 +656,7 @@ class qtype_calculated extends question_type {
                 $this->save_dataset_definitions($form);
                 break;
             case 'datasetitems':
+                echo"<p>form <pre>"; print_r($form);echo"</pre></p>";
                 $this->save_dataset_items($question, $form);
                 $this->save_question_calculated($question, $form);
                 break;
@@ -696,11 +697,6 @@ class qtype_calculated extends question_type {
             }
         }
         return 0;
-    }
-
-    public function supports_dataset_item_generation() {
-        // Calculated support generation of randomly distributed number data.
-        return true;
     }
 
     public function custom_generator_tools_part($mform, $idx, $j) {
@@ -910,9 +906,10 @@ class qtype_calculated extends question_type {
             } else {
                 $DB->insert_record('question_dataset_items', $addeditem);
             }
-
             $i++;
-        }
+            $nexttoadditem = $i ; // Need to set next item to add.
+        }       
+        
         if (isset($addeditem->itemnumber) && $maxnumber < $addeditem->itemnumber
                 && $addeditem->itemnumber < self::MAX_DATASET_ITEMS) {
             $maxnumber = $addeditem->itemnumber;
@@ -938,6 +935,7 @@ class qtype_calculated extends question_type {
                 // In case that for category datasets some new items has been added,
                 // get actual values.
                 // Fix regenerate for this datadefs.
+                $firstnumber = true ; // Use as flag to use "ITEM tO ADD".
                 $defregenerate = 0;
                 if ($synchronize &&
                         !empty ($fromform->nextpageparam["datasetregenerate[$datasetdef->name"])) {
@@ -958,8 +956,14 @@ class qtype_calculated extends question_type {
                             $datasetitem->id = $datasetdefs[$defid]->items[$numberadded]->id;
                             $datasetitem->definition = $datasetdef->id;
                             $datasetitem->itemnumber = $numberadded;
-                            $datasetitem->value =
+                            if ($firstnumber) {
+                                $datasetitem->value = $fromform->number[$nexttoadditem];
+                                $nexttoadditem++;
+                                $firstnumber = false ;
+                            }  else {   
+                                $datasetitem->value =
                                     $this->generate_dataset_item($datasetdef->options);
+                            }        
                             $DB->update_record('question_dataset_items', $datasetitem);
                         }
                         // If not regenerate do nothing as there is already a record.
@@ -967,12 +971,14 @@ class qtype_calculated extends question_type {
                         $datasetitem = new stdClass();
                         $datasetitem->definition = $datasetdef->id;
                         $datasetitem->itemnumber = $numberadded;
-                        if ($this->supports_dataset_item_generation()) {
-                            $datasetitem->value =
+                            if ($firstnumber) {
+                                $datasetitem->value = $fromform->number[$nexttoadditem];
+                                $nexttoadditem++;
+                                $firstnumber = false;
+                            } else {
+                                $datasetitem->value =                             
                                     $this->generate_dataset_item($datasetdef->options);
-                        } else {
-                            $datasetitem->value = '';
-                        }
+                            }       
                         $DB->insert_record('question_dataset_items', $datasetitem);
                     }
                 }// For number added.
