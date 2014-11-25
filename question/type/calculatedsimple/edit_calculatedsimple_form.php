@@ -478,6 +478,7 @@ class qtype_calculatedsimple_edit_form extends qtype_calculated_edit_form {
                 $mform->addElement('header', 'additemhdr1',
                         get_string('wildcardvalues', 'qtype_calculatedsimple'));
                 $mform->closeHeaderBefore('additemhdr1');
+                $mform->setExpanded('additemhdr1');
                 if (!empty($this->numbererrors) || $this->outsidelimit) {
                     $mform->addElement('static', "alert", '', '<span class="error">' .
                             get_string('useadvance', 'qtype_calculatedsimple').'</span>');
