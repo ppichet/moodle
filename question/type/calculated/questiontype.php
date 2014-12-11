@@ -28,8 +28,153 @@ defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/question/type/questionbase.php');
 require_once($CFG->dirroot . '/question/type/numerical/question.php');
+require_once($CFG->libdir . '/evalmath/evalmath.class.php');
+
+class CalculatedEvalMath extends EvalMath {
+
+    var $fb = array(  // built-in functions
+        'abs','acos','acosh','asin','asinh','sin','sinh','arcsin','arcsinh',
+        'cos','cosh','arccos','arccosh',
+        'tan','tanh','arctan','atan','arctanh','atanh',
+        'sqrt','ln','log','log10','exp','floor','ceil',
+        'octdec','decoct' );
+      //  echo "<p>fc<pre>";print_r($fc);"</pre></p>";
+  //  var $fc = array('pow' => '2') ;
+        var $fc = array( // calc functions emulation
+        'average'=>array(-1), 'max'=>array(-1),  'min'=>array(-1),
+        'mod'=>array(2), 'pi'=>array(0), 'power'=>array(2), 'pow'=>array(2),
+        'round'=>array(1, 2), 'sum'=>array(-1), 'rand_int'=>array(2),
+        'rand_float'=>array(0));
+
+    function evaluatecalculated($expr) {
+        $regs = array();
+        preg_match_all('~[\\?:]~',$expr, $regs);
+        $count = 0;
+        if ( $regs[0] != null ){
+            foreach ($regs[0] as $ri => $rs) {
+                echo "<p>ri $ri rs $rs <p>"; // for testing
+                if ($rs == ":"){
+                    $count += -1;
+                    if ($count < 0 ) return $this->trigger(get_string('preceding:informula', 'qtype_calculated', $rs));
+                }
+                if ($rs == "?"){
+                    $count += 1;
+                }
+            }
+            if ($count > 0) return  $this->trigger(get_string('unbalanced?informula', 'qtype_calculated',$expr));
+            $res = preg_split('~[\\?:]~',$expr, -1);
+            // Convert each part of valuetotest ? valueiftrue : valueiffalse using evaluate.
+            foreach ($res as $ri => $resa) {
+                echo "<p>before evaluate $ri rs rs".$res[$ri]."<p>";// for testing
+                $res[$ri] = $this->evaluate($resa);
+                if (is_null($res[$ri])) return  $this->trigger(get_string('unbalanced?informula', 'qtype_calculated',$expr));
+                echo "<p>after evaluate $ri rs rs".$res[$ri]."<p>";// for testing
+            }
+            // Start at 0.
+            $rebuilt="";
+            $ires = 0;
+            if(count($res) > count($regs[0]) ){ //there should be value?value:value
+                $rebuilt .= $res[$ires];
+            foreach ($regs[0] as $ri => $resa) {
+                $rebuilt .= $resa;
+                $ires++;
+                $rebuilt .= $res[$ires];
+            }
+        }
+        echo "<p>refait $refait<p>";// for testing
+            $str = null;
+            eval('$str = '.$rebuilt.';');
+        return $str;
+        }
+    return $this->evaluate($expr);
+    }
+    function pfx($tokens, $vars = array()) {
+
+        if ($tokens == false) return false;
+
+        $stack = new EvalMathStack;
+
+        foreach ($tokens as $token) { // nice and easy
+
+            // if the token is a function, pop arguments off the stack, hand them to the function, and push the result back on
+            if (is_array($token)) { // it's a function!
+                $fnn = $token['fnn'];
+                $count = $token['argcount'];
+                if (in_array($fnn, $this->fb)) { // built-in function:
+                    if (is_null($op1 = $stack->pop())) return $this->trigger(get_string('internalerror', 'mathslib'));
+                    $fnn = preg_replace("/^arc/", "a", $fnn); // for the 'arc' trig synonyms
+                    if ($fnn == 'ln') $fnn = 'log';
+                    eval('$stack->push(' . $fnn . '($op1));'); // perfectly safe eval()
+                } elseif (array_key_exists($fnn, $this->fc)) { // calc emulation function
+                    // get args
+                    $args = array();
+                    for ($i = $count-1; $i >= 0; $i--) {
+                        if (is_null($args[] = $stack->pop())) return $this->trigger(get_string('internalerror', 'mathslib'));
+                    }
+                    $res = call_user_func_array(array('CalcEvalMathFuncs', $fnn), array_reverse($args));
+                    if ($res === FALSE) {
+                        return $this->trigger(get_string('internalerror', 'mathslib'));
+                    }
+                    $stack->push($res);
+                } elseif (array_key_exists($fnn, $this->f)) { // user function
+                    // get args
+                    $args = array();
+                    for ($i = count($this->f[$fnn]['args'])-1; $i >= 0; $i--) {
+                        if (is_null($args[$this->f[$fnn]['args'][$i]] = $stack->pop())) return $this->trigger(get_string('internalerror', 'mathslib'));
+                    }
+                    $stack->push($this->pfx($this->f[$fnn]['func'], $args)); // yay... recursion!!!!
+                }
+            // if the token is a binary operator, pop two values off the stack, do the operation, and push the result back on
+            } elseif (in_array($token, array('+', '-', '*', '/', '^'), true)) {
+                if (is_null($op2 = $stack->pop())) return $this->trigger(get_string('internalerror', 'mathslib'));
+                if (is_null($op1 = $stack->pop())) return $this->trigger(get_string('internalerror', 'mathslib'));
+                switch ($token) {
+                    case '+':
+                        $stack->push($op1+$op2); break;
+                    case '-':
+                        $stack->push($op1-$op2); break;
+                    case '*':
+                        $stack->push($op1*$op2); break;
+                    case '/':
+                        if ($op2 == 0) return $this->trigger(get_string('divisionbyzero', 'mathslib'));
+                        $stack->push($op1/$op2); break;
+                    case '^':
+                        $stack->push(pow($op1, $op2)); break;
+                }
+            // if the token is a unary operator, pop one value off the stack, do the operation, and push it back on
+            } elseif ($token == "_") {
+                $stack->push(-1*$stack->pop());
+            // if the token is a number or variable, push it on the stack
+            } else {
+                if (is_numeric($token)) {
+                    $stack->push($token);
+                } elseif (array_key_exists($token, $this->v)) {
+                    $stack->push($this->v[$token]);
+                } elseif (array_key_exists($token, $vars)) {
+                    $stack->push($vars[$token]);
+                } else {
+                    return $this->trigger(get_string('undefinedvariable', 'mathslib', $token));
+                }
+            }
+        }
+        // when we're out of tokens, the stack should have a single element, the final result
+        if ($stack->count != 1) return $this->trigger(get_string('internalerror', 'mathslib'));
+        return $stack->pop();
+    }
+}
 
 
+    
+class CalcEvalMathFuncs extends EvalMathFuncs {
+
+    static function pow($op1, $op2) {
+        return pow($op1, $op2);
+    }
+
+}
+
+
+//}
 /**
  * The calculated question type.
  *
@@ -43,6 +188,9 @@ class qtype_calculated extends question_type {
     const MAX_DATASET_ITEMS = 100;
 
     public $wizardpagesnumber = 3;
+
+    /** @var CalculatedEvalMath $ev evaluation class instance to use. **/
+    protected $ev;
 
     public function get_question_options($question) {
         // First get the datasets and default options.
@@ -1078,7 +1226,16 @@ class qtype_calculated extends question_type {
                 $answer->min = ' ';
                 $formattedanswer->answer = $answer->answer;
             } else {
-                eval('$ansvalue = '.$formula.';');
+                  // new EvalMath(true, true);
+                  $errorevaluate = array();
+                    $result = qqqtypeevaluate($formula, $errorevaluate);
+              //      echo "<p>1089formula".$formula." results<pre>";print_r($result);"</pre></p>"; 
+                        if( $result[1] == '') $ansvalue = $result[0] ;
+                        else $ansvalue = $result[1] ;
+                      //  echo "<p> result <pre>";print_r( $result);"</pre></p>"; 
+                      //  echo "<p> ansvalue <pre>";print_r( $ansvalue);"</pre></p>"; 
+                  $ansvalue = $result[0];
+               // eval($ansvalue = '.$formula.';')
                 $ans = new qtype_numerical_answer(0, $ansvalue, 0, '', 0, $answer->tolerance);
                 $ans->tolerancetype = $answer->tolerancetype;
                 list($answer->min, $answer->max) = $ans->get_tolerance_interval($answer);
@@ -1214,8 +1371,11 @@ class qtype_calculated extends question_type {
         } else if ($formula === '*') {
             $str = '*';
         } else {
-            $str = null;
-            eval('$str = '.$formula.';');
+           // $str = $error[0];
+            $errorevaluate = array();
+            $value = qqqtypeevaluate($formula, $errorevaluate);
+           // eval('$str = '.$formula.';');
+           $str = $value[0];
         }
         return $str;
     }
@@ -1899,6 +2059,26 @@ function qtype_calculated_calculate_answer($formula, $individualdata,
     return $calculated;
 }
 
+    function qqqtypeevaluate($item, $placetoputanyerror = null) {
+        $ev = new CalculatedEvalMath(true, true);
+       // $ev->suppress_errors = true;
+        $result = $ev->evaluatecalculated($item);
+        $error = '';
+        if ($result === false) {
+            $error = get_string('errorreportedbyexpressionevaluator',
+                                                    'qtype_calculated', $ev->last_error);
+        }
+        if (is_nan($result)) {
+            $error = get_string('expressionevaluatesasnan', 'qtype_calculated');
+        }
+        if (is_infinite($result)) {
+            $error = get_string('expressionevaluatesasinfinite', 'qtype_calculated');
+        }
+        if (!empty($error) && !is_null($placetoputanyerror)) {
+            $placetoputanyerror = $error;
+        }
+        return array(0=> $result,1 => $placetoputanyerror,);
+    }
 
 /**
  * Validate a forumula.
@@ -1913,7 +2093,13 @@ function qtype_calculated_find_formula_errors($formula) {
     while (preg_match('~\\{[[:alpha:]][^>} <{"\']*\\}~', $formula, $regs)) {
         $formula = str_replace($regs[0], '1', $formula);
     }
-
+    $errorevaluate = array();
+   // new EvalMath(true, true);
+    $result = qqqtypeevaluate($formula, $errorevaluate);
+ //    echo "<p>1956 formula".$formula." results<pre>";print_r($result);"</pre></p>"; 
+//    echo "<p>formula".$formula." $errorevaluate<pre>";print_r($errorevaluate);"</pre></p>"; 
+    if( $result[1]== '') return false ;
+    else return $result[1] ;
     // Strip away empty space and lowercase it.
     $formula = strtolower(str_replace(' ', '', $formula));
 

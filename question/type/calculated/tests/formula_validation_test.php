@@ -49,7 +49,7 @@ class qtype_calculated_formula_validation_testcase extends basic_testcase {
     }
 
     public function test_safe_functions_ok() {
-        $this->assertFalse(qtype_calculated_find_formula_errors('abs(-1)'));
+        $this->assertFalse(qtype_calculated_find_formula_errors('abs(-2)'));
         $this->assertFalse(qtype_calculated_find_formula_errors('tan(pi())'));
         $this->assertFalse(qtype_calculated_find_formula_errors('log(10)'));
         $this->assertFalse(qtype_calculated_find_formula_errors('log(64, 2)'));

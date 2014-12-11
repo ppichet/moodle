@@ -156,3 +156,9 @@ $string['wildcards'] = 'Wild cards {a}...{z}';
 $string['wildcardvalues'] = 'Wild card(s) values';
 $string['wildcardvaluesgenerated'] = 'Wild card(s) values generated';
 $string['zerosignificantfiguresnotallowed'] = 'The correct answer cannot have zero significant figures!';
+$string['errorreportedbyexpressionevaluator'] = 'Expression evaluation error: {$a}';
+$string['expressionevaluatesasinfinite'] = 'Result is infinite.';
+$string['expressionevaluatesasnan'] = 'Result is not a number.';
+$string['preceding:informula'] =' : preceding ? ERROR in the formula:{$a}';
+$string['unbalanced?informula'] = '?: unbalanced more ? than : in the formula:{$a}';
+
