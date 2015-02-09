@@ -147,7 +147,7 @@ abstract class qtype_multianswer_subq_renderer_base extends qtype_renderer {
                 && (!is_null($fraction) || $feedback)) {
             $a = new stdClass();
             $a->mark = format_float($fraction * $subq->maxmark, $options->markdp);
-            $a->max =  format_float($subq->maxmark, $options->markdp);
+            $a->max = format_float($subq->maxmark, $options->markdp);
             $feedback[] = get_string('markoutofmax', 'question', $a);
         }
 
@@ -199,7 +199,7 @@ class qtype_multianswer_textfield_renderer extends qtype_multianswer_subq_render
         foreach ($subq->answers as $ans) {
             $size = max($size, core_text::strlen(trim($ans->answer)));
         }
-        $size = min(60, round($size + rand(0, $size*0.15)));
+        $size = min(60, round($size + rand(0, $size * 0.15)));
         // The rand bit is to make guessing harder.
 
         $inputattributes = array(
@@ -234,8 +234,18 @@ class qtype_multianswer_textfield_renderer extends qtype_multianswer_subq_render
         $output .= html_writer::tag('label', get_string('answer'),
                 array('class' => 'subq accesshide', 'for' => $inputattributes['id']));
         $output .= html_writer::empty_tag('input', $inputattributes);
-        $output .= $feedbackimg;
-        $output .= $feedbackpopup;
+        if ($qa->get_state() == question_state::$invalid) {
+            $validationerror = $subq->get_validation_error(array('answer' => $response, 'unit' => null));
+            if ($validationerror != '' ) {
+                $output .= $this->feedback_image($matchinganswer->fraction);
+                $feedbackpopup = $subq->get_validation_error(array('answer' => $response, 'unit' => null));
+                $output .= html_writer::tag('span',  $feedbackpopup,
+                    array('class' => 'feedbackspan accesshide'));
+            }
+        } else {
+            $output .= $feedbackimg;
+            $output .= $feedbackpopup;
+        }
         $output .= html_writer::end_tag('span');
 
         return $output;
@@ -302,8 +312,19 @@ class qtype_multianswer_multichoice_inline_renderer
         $output .= html_writer::tag('label', get_string('answer'),
                 array('class' => 'subq accesshide', 'for' => $inputattributes['id']));
         $output .= $select;
-        $output .= $feedbackimg;
-        $output .= $feedbackpopup;
+        if ($qa->get_state() == question_state::$invalid) {
+            $validationerror = $subq->get_validation_error(array('answer' => $response, 'unit' => null));
+            if ($validationerror != '' ) {
+                $output .= $this->feedback_image($matchinganswer->fraction);
+                $feedbackpopup = $subq->get_validation_error(array('answer' => $response, 'unit' => null));
+                $output .= html_writer::tag('span',  $feedbackpopup,
+                    array('class' => 'feedbackspan accesshide'));
+            }
+        } else {
+            $output .= $feedbackimg;
+            $output .= $feedbackpopup;
+        }
+
         $output .= html_writer::end_tag('span');
 
         return $output;
@@ -383,7 +404,7 @@ class qtype_multianswer_multichoice_vertical_renderer extends qtype_multianswer_
                 $subq->maxmark > 0) {
             $a = new stdClass();
             $a->mark = format_float($fraction * $subq->maxmark, $options->markdp);
-            $a->max =  format_float($subq->maxmark, $options->markdp);
+            $a->max = format_float($subq->maxmark, $options->markdp);
 
             $feedback[] = html_writer::tag('div', get_string('markoutofmax', 'question', $a));
         }
@@ -398,6 +419,12 @@ class qtype_multianswer_multichoice_vertical_renderer extends qtype_multianswer_
                     break;
                 }
             }
+        }
+        if ($fraction == null && $qa->get_state() == question_state::$invalid) {
+        	
+            $result .= html_writer::nonempty_tag('div',
+                    $subq->get_validation_error($qa->get_last_qt_data()),
+                    array('class' => 'validationerror'));
         }
 
         $result .= html_writer::nonempty_tag('div', implode('<br />', $feedback), array('class' => 'outcome'));
