@@ -37,7 +37,7 @@ require_once($CFG->dirroot . '/question/type/multianswer/question.php');
  */
 class qtype_multianswer_test_helper extends question_test_helper {
     public function get_test_questions() {
-        return array('twosubq', 'fourmc', 'numericalzero', 'dollarsigns');
+        return array('twosubq', 'fourmc', 'numericalzero', 'numericalpi', 'dollarsigns');
     }
 
     /**
@@ -376,6 +376,49 @@ class qtype_multianswer_test_helper extends question_test_helper {
         $sub->generalfeedbackformat = FORMAT_HTML;
         $sub->answers = array(
             13 => new qtype_numerical_answer(13, '0', 1.0, '', FORMAT_HTML, 0),
+        );
+        $sub->qtype = question_bank::get_qtype('numerical');
+        $sub->ap = new qtype_numerical_answer_processor(array());
+        $sub->maxmark = 1;
+
+        $q->subquestions = array(
+            1 => $sub,
+        );
+
+        return $q;
+    }
+    /**
+     * Makes a multianswer question with one numerical subquestion, right answer 3.14
+     * This is used for testing the MDL-49251 bug.
+     * @return qtype_multianswer_question
+     */
+    public function make_multianswer_question_numericalpi() {
+        question_bank::load_question_definition_classes('multianswer');
+        $q = new qtype_multianswer_question();
+        test_question_maker::initialise_a_question($q);
+        $q->name = 'Numerical 3.14';
+        $q->questiontext =
+                'Enter pi 2 decimals: {#1}.';
+        $q->generalfeedback = '';
+        $q->qtype = question_bank::get_qtype('multianswer');
+
+        $q->textfragments = array(
+            'Enter pi 2 decimals: ',
+            '.',
+        );
+        $q->places = array('1' => '1');
+
+        // Numerical subquestion.
+        question_bank::load_question_definition_classes('numerical');
+        $sub = new qtype_numerical_question();
+        test_question_maker::initialise_a_question($sub);
+        $sub->name = 'Numerical 3.14';
+        $sub->questiontext = '{1:NUMERICAL:=3.14:0}';
+        $sub->questiontextformat = FORMAT_HTML;
+        $sub->generalfeedback = '';
+        $sub->generalfeedbackformat = FORMAT_HTML;
+        $sub->answers = array(
+            13 => new qtype_numerical_answer(13, '3.14', 1.0, '', FORMAT_HTML, 0),
         );
         $sub->qtype = question_bank::get_qtype('numerical');
         $sub->ap = new qtype_numerical_answer_processor(array());

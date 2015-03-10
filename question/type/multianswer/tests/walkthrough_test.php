@@ -378,6 +378,78 @@ class qtype_multianswer_walkthrough_test extends qbehaviour_walkthrough_test_bas
                 $this->currentoutput);
     }
 
+    /**
+     * Uses the multianswer question with one numerical subquestion, right answer 3.14
+     * for testing the MDL-49251 bug.
+     *
+     */
+    public function test_interactive_numerical_display_validation_error() {
+
+        // Create a multianswer question.
+        // Create a multianswer question with one numerical subquestion, right answer 3.14.
+        $q = test_question_maker::make_question('multianswer', 'numericalpi');
+        $q->hints = array(
+                new question_hint_with_parts(11, 'This is the first hint.', FORMAT_HTML, false, true),
+                new question_hint_with_parts(12, 'This is the second hint.', FORMAT_HTML, true, true),
+        );
+        $numberseparator = "3".$q->subquestions[1]->ap->get_separator()."14";
+        $numberpoint = "3".$q->subquestions[1]->ap->get_point()."14";
+
+        $this->start_attempt_at_question($q, 'interactive', 1);
+
+        // Check the initial state.
+        $this->check_current_state(question_state::$todo);
+        $this->check_current_mark(null);
+        $this->assertEquals('interactivecountback',
+                $this->quba->get_question_attempt($this->slot)->get_behaviour_name());
+        $this->check_current_output(
+                $this->get_contains_marked_out_of_summary(),
+                $this->get_does_not_contain_feedback_expectation(),
+                $this->get_contains_submit_button_expectation(true),
+                $this->get_does_not_contain_validation_error_expectation(),
+                $this->get_does_not_contain_feedback_expectation(),
+                $this->get_tries_remaining_expectation(3),
+                $this->get_does_not_contain_num_parts_correct(),
+                $this->get_no_hint_visible_expectation());
+
+        // Submit a non numerical  response.
+        $this->process_submission(array('sub1_answer' => 'a', '-submit' => 1));
+
+        // Verify.
+        $this->check_current_state(question_state::$invalid);
+        $this->check_current_mark(null);
+        $this->check_current_output(
+                $this->get_does_not_contain_num_parts_correct(),
+                $this->get_invalid_answer_expectation(),
+                new question_pattern_expectation('/class="feedbackspan/'),
+                new question_pattern_expectation('/class="feedback/'),
+                $this->get_contains_submit_button_expectation(true),
+                            new question_pattern_expectation('/' .
+                        preg_quote(get_string('invalidnumber', 'qtype_numerical'), '/') . '/'));
+        // Submit a non numerical  response containing the thousand separator.
+        $this->process_submission(array('sub1_answer' => $numberseparator, '-submit' => 1));
+        // Verify.
+        $this->check_current_state(question_state::$invalid);
+        $this->check_current_mark(null);
+        $this->check_current_output(
+            $this->get_does_not_contain_num_parts_correct(),
+            $this->get_invalid_answer_expectation(),
+                new question_pattern_expectation('/class="feedbackspan/'),
+                new question_pattern_expectation('/class="feedback/'),
+            $this->get_contains_submit_button_expectation(true),
+            new question_pattern_expectation('/' .
+                preg_quote(get_string('pleaseenteranswerwithoutthousandssep', 'qtype_numerical',
+                    $q->subquestions[1]->ap->get_separator()), '/') . '/'));
+        // Submit a correct numerical response using the current decimal point.
+        $this->process_submission(array('sub1_answer' => $numberpoint, '-submit' => 1));
+        // Verify.
+        $this->check_current_state(question_state::$gradedright);
+        $this->check_current_mark(1.0);
+        $this->check_current_output(new question_pattern_expectation('/class="feedbackspan/'),
+                new question_pattern_expectation('/class="feedback/'));
+
+    }
+
     public function test_interactivecountback_feedback() {
 
         // Create a multianswer question.
